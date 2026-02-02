@@ -2,499 +2,355 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CollabCode Enterprise</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CollabCode | Workspace</title>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 
     <style>
-        /* * ==========================================
-         * 1. DESIGN TOKENS & VARIABLES
-         * ==========================================
-         */
         :root {
-            /* Palette: Midnight Pro */
-            --bg-body: #050505;
-            --bg-card: rgba(20, 20, 23, 0.7);
-            --bg-input: #0a0a0c;
-            --bg-input-hover: #121214;
+            /* --- COLOR PALETTE --- */
+            --bg-app: #09090b;
+            --bg-card: #18181b;
+            --bg-input: #27272a;
             
-            /* Borders */
-            --border-subtle: rgba(255, 255, 255, 0.08);
-            --border-hover: rgba(255, 255, 255, 0.15);
-            --border-active: rgba(255, 255, 255, 0.3);
-
-            /* Brand Colors */
-            --primary: #22c55e;
-            --primary-hover: #16a34a;
-            --primary-glow: rgba(34, 197, 94, 0.25);
+            --border-color: #27272a;
+            --border-hover: #3f3f46;
             
-            /* Text Colors */
-            --text-main: #ededef;
+            --primary: #10b981;
+            --primary-dark: #059669;
+            --primary-glow: rgba(16, 185, 129, 0.15);
+            
+            --danger: #ef4444;
+            --danger-bg: rgba(239, 68, 68, 0.1);
+            
+            --text-main: #f4f4f5;
             --text-muted: #a1a1aa;
-            --text-disabled: #52525b;
-
-            /* Spacing */
-            --radius-sm: 6px;
-            --radius-md: 12px;
-            --radius-lg: 16px;
-            --space-md: 16px;
-            --space-lg: 24px;
-            --space-xl: 32px;
-
-            /* Animation */
-            --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+            
+            /* --- SPACING & RADIUS --- */
+            --radius-md: 8px;
+            --radius-lg: 12px;
+            --space-6: 24px;
         }
 
-        /* * ==========================================
-         * 2. BASE STYLES
-         * ==========================================
-         */
-        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-font-smoothing: antialiased; }
+        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
 
         body {
-            background-color: var(--bg-body);
+            background-color: var(--bg-app);
             background-image: 
-                radial-gradient(circle at 50% 0%, rgba(34, 197, 94, 0.08) 0%, transparent 40%),
-                radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.02) 0%, transparent 30%);
+                radial-gradient(at 0% 0%, rgba(16, 185, 129, 0.05) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.05) 0px, transparent 50%);
             color: var(--text-main);
-            font-family: 'Inter', system-ui, sans-serif;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             min-height: 100vh;
-            display: flex; align-items: center; justify-content: center;
-            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+            line-height: 1.5;
         }
 
-        /* Background Glow */
-        body::before {
-            content: ''; position: absolute; top: -100px; left: 50%; transform: translateX(-50%);
-            width: 600px; height: 400px;
-            background: radial-gradient(ellipse at center, var(--primary-glow) 0%, transparent 70%);
-            opacity: 0.4; pointer-events: none; z-index: -1;
-        }
+        .container { width: 100%; max-width: 1100px; display: grid; grid-template-columns: 380px 1fr; gap: 24px; align-items: start; }
+        @media (max-width: 900px) { .container { grid-template-columns: 1fr; } }
 
-        /* * ==========================================
-         * 3. LAYOUT & CARDS
-         * ==========================================
-         */
-        .view-container {
-            width: 100%; max-width: 500px; padding: var(--space-lg);
-            perspective: 1000px;
-            display: none; /* Hidden by default, JS toggles this */
-            opacity: 0;
-            transition: opacity 0.4s var(--ease-out), transform 0.4s var(--ease-out);
-        }
+        /* --- CARDS --- */
+        .card { background: rgba(24, 24, 27, 0.6); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border-color); border-radius: var(--radius-lg); padding: var(--space-6); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .header { margin-bottom: var(--space-6); display: flex; justify-content: space-between; align-items: center; }
+        .header h2 { font-size: 18px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 10px; }
+        .header svg { color: var(--primary); height: 20px; width: 20px; }
 
-        .view-container.active {
-            display: block;
-            opacity: 1;
-            animation: cardEntrance 0.6s var(--ease-out) forwards;
-        }
+        /* --- FORMS --- */
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-size: 13px; font-weight: 500; color: var(--text-muted); margin-bottom: 8px; }
+        input, select { width: 100%; height: 42px; background: var(--bg-app); border: 1px solid var(--border-color); color: var(--text-main); padding: 0 12px; border-radius: var(--radius-md); font-size: 14px; transition: all 0.2s ease; }
+        input:hover, select:hover { border-color: var(--border-hover); }
+        input:focus, select:focus { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-glow); }
+        input.error { border-color: var(--danger); }
+        .error-msg { color: var(--danger); font-size: 12px; margin-top: 6px; display: none; }
 
-        @keyframes cardEntrance {
-            from { opacity: 0; transform: translateY(20px) scale(0.98); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
+        /* --- BUTTONS --- */
+        .btn-submit { width: 100%; height: 44px; background: var(--primary); color: #000; border: none; border-radius: var(--radius-md); font-weight: 600; font-size: 14px; cursor: pointer; transition: transform 0.1s, background-color 0.2s; }
+        .btn-submit:hover:not(:disabled) { background-color: var(--primary-dark); }
+        .btn-submit:active:not(:disabled) { transform: translateY(1px); }
+        .btn-submit:disabled { opacity: 0.6; cursor: not-allowed; filter: grayscale(0.5); }
+        .icon-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: 4px; transition: color 0.2s; }
+        .icon-btn:hover { color: var(--text-main); background: var(--bg-input); }
 
-        .card {
-            background: var(--bg-card);
-            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--border-subtle); border-radius: var(--radius-lg);
-            padding: 40px;
-            box-shadow: 0 0 0 1px rgba(0,0,0,0.2), 0 20px 40px -10px rgba(0,0,0,0.5);
-        }
+        /* --- RADIO & TOGGLES --- */
+        .radio-group { display: flex; gap: 8px; }
+        .radio-card { flex: 1; padding: 10px; border: 1px solid var(--border-color); background: var(--bg-app); border-radius: var(--radius-md); cursor: pointer; text-align: center; font-size: 13px; font-weight: 500; color: var(--text-muted); transition: all 0.2s; }
+        .radio-card:hover { border-color: var(--border-hover); }
+        .radio-card.selected { border-color: var(--primary); color: var(--primary); background: var(--primary-glow); }
+        .toggle-wrapper { display: flex; align-items: center; justify-content: space-between; width: 100%; cursor: pointer; }
+        .toggle-switch { position: relative; width: 36px; height: 20px; background: var(--bg-input); border-radius: 20px; transition: 0.3s; border: 1px solid var(--border-color); }
+        .toggle-switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; background: var(--text-muted); border-radius: 50%; transition: 0.3s; }
+        input:checked + .toggle-switch { background: var(--primary); border-color: var(--primary); }
+        input:checked + .toggle-switch::after { transform: translateX(16px); background: #fff; }
 
-        /* * ==========================================
-         * 4. TYPOGRAPHY
-         * ==========================================
-         */
-        .header { margin-bottom: var(--space-xl); text-align: left; }
-        .header h1 {
-            font-size: 24px; font-weight: 700; color: #fff; letter-spacing: -0.03em;
-            display: flex; align-items: center; gap: 12px; margin-bottom: 8px;
-        }
-        .header h1 svg { color: var(--primary); filter: drop-shadow(0 0 8px var(--primary-glow)); }
-        .header p { color: var(--text-muted); font-size: 14px; line-height: 1.5; }
-
-        /* * ==========================================
-         * 5. FORMS & INPUTS
-         * ==========================================
-         */
-        .form-group { margin-bottom: 24px; }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: 24px; }
-
-        label {
-            display: block; font-size: 12px; font-weight: 600; text-transform: uppercase;
-            letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 10px;
-            transition: color 0.2s;
-        }
-        .form-group:focus-within label { color: var(--text-main); }
-
-        input[type="text"], input[type="password"], input[type="email"], select {
-            width: 100%; height: 48px;
-            background-color: var(--bg-input);
-            border: 1px solid var(--border-subtle);
-            color: var(--text-main); padding: 0 16px;
-            border-radius: var(--radius-sm);
-            font-size: 14px; font-family: 'Inter', sans-serif;
-            transition: all 0.2s var(--ease-out);
-            appearance: none;
-        }
-        input:focus, select:focus {
-            background-color: var(--bg-input); border-color: var(--primary);
-            box-shadow: 0 0 0 4px var(--primary-glow);
-        }
-        .select-wrapper { position: relative; }
-        .select-wrapper::after {
-            content: ''; position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
-            width: 10px; height: 6px; pointer-events: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
-            background-size: contain; background-repeat: no-repeat;
-        }
-
-        /* * ==========================================
-         * 6. RADIO CARDS & TOGGLES
-         * ==========================================
-         */
-        .radio-group { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
-        .radio-card {
-            background: var(--bg-input); border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-md); padding: 16px; cursor: pointer;
-            transition: all 0.2s var(--ease-out); position: relative; overflow: hidden;
-        }
-        .radio-card:hover { border-color: var(--border-active); transform: translateY(-2px); }
-        .radio-card.selected {
-            background: rgba(34, 197, 94, 0.08); border-color: var(--primary);
-            box-shadow: 0 4px 12px var(--primary-glow);
-        }
-        .radio-title { font-size: 14px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
-        .radio-title svg { width: 16px; height: 16px; color: var(--text-muted); transition: color 0.2s; }
-        .radio-card.selected .radio-title svg { color: var(--primary); }
-        .radio-desc { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
-
-        .toggle-container {
-            background: var(--bg-input); border: 1px solid var(--border-subtle);
-            border-radius: var(--radius-md); padding: 12px 16px;
-            display: flex; align-items: center; justify-content: space-between;
-        }
-        .switch-wrapper { position: relative; display: inline-block; width: 44px; height: 24px; }
-        .switch-wrapper input { opacity: 0; width: 0; height: 0; }
-        .slider {
-            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-            background-color: var(--border-active); border-radius: 34px; transition: .3s;
-        }
-        .slider:before {
-            position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
-            background-color: white; border-radius: 50%; transition: .3s;
-        }
-        input:checked + .slider { background-color: var(--primary); }
-        input:checked + .slider:before { transform: translateX(20px); }
-
-        #password-section {
-            overflow: hidden; max-height: 0; opacity: 0;
-            transform: translateY(-10px); transition: all 0.3s var(--ease-out);
-        }
-        #password-section.visible { max-height: 80px; opacity: 1; transform: translateY(0); margin-top: 16px; }
-
-        /* * ==========================================
-         * 7. BUTTONS
-         * ==========================================
-         */
-        .btn-submit {
-            width: 100%; height: 52px; background: var(--primary); color: #000;
-            border: none; border-radius: var(--radius-sm); font-size: 15px; font-weight: 700;
-            cursor: pointer; position: relative; overflow: hidden; transition: all 0.2s;
-            box-shadow: 0 4px 20px var(--primary-glow); margin-top: 24px;
-        }
-        .btn-submit:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        /* --- ROOM LIST --- */
+        .room-list { display: flex; flex-direction: column; gap: 12px; max-height: 600px; overflow-y: auto; padding-right: 4px; }
+        .room-list::-webkit-scrollbar { width: 6px; }
+        .room-list::-webkit-scrollbar-track { background: transparent; }
+        .room-list::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 3px; }
+        .room-item { background: var(--bg-app); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 16px; display: flex; justify-content: space-between; align-items: center; transition: all 0.2s ease; position: relative; }
+        .room-item.expired { opacity: 0.5; border-style: dashed; }
+        .room-info h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+        .room-meta { display: flex; gap: 12px; font-size: 12px; color: var(--text-muted); align-items: center; font-family: 'JetBrains Mono', monospace; }
+        .badge { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; border: 1px solid transparent; }
+        .badge.private { color: #f59e0b; background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2); }
+        .badge.public { color: var(--primary); background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); }
+        .badge.expired { color: var(--danger); background: var(--danger-bg); border-color: var(--danger); }
         
-        .btn-text {
-            background: transparent; border: none; color: var(--text-muted);
-            font-size: 12px; cursor: pointer; margin-top: 16px; width: 100%;
-            transition: color 0.2s;
-        }
-        .btn-text:hover { color: var(--text-main); text-decoration: underline; }
+        .join-btn { background: transparent; border: 1px solid var(--border-color); color: var(--text-main); padding: 6px 14px; border-radius: var(--radius-md); cursor: pointer; font-size: 13px; font-weight: 500; transition: all 0.2s; }
+        .join-btn:hover { background: var(--text-main); color: var(--bg-app); border-color: var(--text-main); }
 
-        .loader {
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            width: 20px; height: 20px; border: 2px solid rgba(0,0,0,0.1); border-top-color: #000;
-            border-radius: 50%; animation: spin 0.8s linear infinite; opacity: 0;
-        }
-        .btn-submit.loading { color: transparent; pointer-events: none; }
-        .btn-submit.loading .loader { opacity: 1; }
-        @keyframes spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
-
-        /* User Profile Badge */
-        .user-badge {
-            display: flex; align-items: center; justify-content: space-between;
-            padding: 12px; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2);
-            border-radius: var(--radius-sm); margin-bottom: 24px; color: var(--primary); font-size: 13px; font-weight: 600;
-        }
-        .btn-logout { background: transparent; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; text-decoration: underline; }
+        /* --- DROPDOWN MENU (NEW) --- */
+        .actions-group { display: flex; align-items: center; gap: 8px; }
+        .menu-wrapper { position: relative; }
+        .menu-btn { background: transparent; border: none; color: var(--text-muted); padding: 6px; cursor: pointer; border-radius: 4px; display: flex; align-items: center; }
+        .menu-btn:hover { background: var(--bg-input); color: var(--text-main); }
         
+        .dropdown {
+            position: absolute; right: 0; top: 100%; width: 180px; background: #18181b; 
+            border: 1px solid var(--border-color); border-radius: 8px; padding: 4px; 
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5); z-index: 50; display: none;
+            transform-origin: top right; animation: scaleIn 0.1s ease;
+        }
+        .dropdown.show { display: block; }
+        
+        .dropdown-item {
+            display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 12px;
+            background: transparent; border: none; color: var(--text-muted); text-align: left;
+            font-size: 13px; cursor: pointer; border-radius: 4px;
+        }
+        .dropdown-item:hover { background: var(--bg-input); color: var(--text-main); }
+        .dropdown-item.danger { color: var(--danger); }
+        .dropdown-item.danger:hover { background: rgba(239, 68, 68, 0.1); }
+        
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
     </style>
 </head>
 <body>
 
-    <div id="auth-view" class="view-container">
+    <div class="container">
+        
         <div class="card">
             <div class="header">
-                <h1>
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
-                    Welcome
-                </h1>
-                <p id="auth-subtitle">Sign in to access your collaborative workspace.</p>
-            </div>
-
-            <div class="form-group">
-                <label>Email Address</label>
-                <input type="email" id="auth-email" placeholder="user@example.com" value="demo@user.com">
-            </div>
-
-            <div class="form-group">
-                <label>Password</label>
-                <input type="password" id="auth-pass" placeholder="••••••••" value="password">
-            </div>
-
-            <div class="form-group" id="name-group" style="display:none;">
-                <label>Full Name</label>
-                <input type="text" id="auth-name" placeholder="John Doe">
-            </div>
-
-            <button class="btn-submit" id="auth-btn" onclick="Auth.submit()">
-                <span>Sign In</span>
-                <div class="loader"></div>
-            </button>
-
-            <button class="btn-text" onclick="Auth.toggleMode()">
-                <span id="auth-toggle-text">New here? Create an account</span>
-            </button>
-        </div>
-    </div>
-
-    <div id="app-view" class="view-container">
-        <div class="card">
-            
-            <div class="user-badge">
-                <span id="user-display-name">Logged in as User</span>
-                <button class="btn-logout" onclick="Auth.logout()">Sign Out</button>
-            </div>
-
-            <div class="header">
-                <h1>
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
                     New Session
-                </h1>
-                <p>Configure your environment options below.</p>
+                </h2>
             </div>
 
-            <div id="create-form">
-                <div class="form-group">
-                    <label>Project Name</label>
-                    <input type="text" id="roomName" placeholder="e.g. Daily Standup Notes">
-                </div>
+            <div class="form-group">
+                <label>Project Name</label>
+                <input type="text" id="roomName" placeholder="e.g. Algo Practice" oninput="App.checkDuplicateName()" autocomplete="off">
+                <div id="name-error" class="error-msg">A room with this name already exists.</div>
+            </div>
 
-                <div class="form-row">
-                    <div class="col">
-                        <label>Environment</label>
-                        <div class="select-wrapper">
-                            <select id="language">
-                                <option value="javascript">JavaScript</option>
-                                <option value="python">Python 3</option>
-                                <option value="java">Java 17</option>
-                                <option value="cpp">C++ 20</option>
-                                <option value="html">HTML5</option>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col">
-                        <label>Timeout</label>
-                        <div class="select-wrapper">
-                            <select id="expiry">
-                                <option value="never">Unlimited</option>
-                                <option value="1h">1 Hour</option>
-                                <option value="24h">24 Hours</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
+            <div class="form-group">
+                <label>Environment</label>
+                <select id="language">
+                    <option value="javascript">JavaScript (Node)</option>
+                    <option value="python">Python 3</option>
+                    <option value="java">Java 17</option>
+                    <option value="cpp">C++ 20</option>
+                    <option value="html">HTML5</option>
+                </select>
+            </div>
 
-                <div class="form-group">
-                    <label>Access Control</label>
-                    <div class="radio-group">
-                        <div class="radio-card selected" onclick="App.toggleAccess('edit', this)">
-                            <div class="radio-title">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
-                                Editor
-                            </div>
-                            <div class="radio-desc">Collaborators have full access.</div>
-                        </div>
-                        <div class="radio-card" onclick="App.toggleAccess('view', this)">
-                            <div class="radio-title">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                                Spectator
-                            </div>
-                            <div class="radio-desc">Read-only mode for guests.</div>
-                        </div>
-                    </div>
+            <div class="form-group">
+                <label>Guest Permissions</label>
+                <div class="radio-group">
+                    <div class="radio-card selected" onclick="App.toggleAccess('edit', this)">Collaborator</div>
+                    <div class="radio-card" onclick="App.toggleAccess('view', this)">Spectator</div>
                 </div>
+            </div>
 
-                <div class="form-group">
-                    <div class="toggle-container">
-                        <div>
-                            <span style="font-size:14px; font-weight:500; color:var(--text-main);">Private Session</span>
-                            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Require password to join</div>
-                        </div>
-                        <label class="switch-wrapper">
-                            <input type="checkbox" id="privateToggle" onchange="App.togglePassword()">
-                            <span class="slider"></span>
-                        </label>
-                    </div>
-                    <div id="password-section">
-                        <input type="password" id="roomPassword" placeholder="Set session password...">
-                    </div>
-                </div>
+            <div class="form-group">
+                <label>Auto-Destruct Timer</label>
+                <select id="expiry">
+                    <option value="never">Never Expire</option>
+                    <option value="1h">1 Hour</option>
+                    <option value="24h">24 Hours</option>
+                </select>
+            </div>
 
-                <button class="btn-submit" id="createBtn" onclick="App.createRoom()">
-                    <span>Launch Environment</span>
-                    <div class="loader"></div>
+            <div class="form-group">
+                <label for="privateToggle" class="toggle-wrapper">
+                    <span style="font-size: 14px;">Password Protection</span>
+                    <input type="checkbox" id="privateToggle" style="display:none;">
+                    <div class="toggle-switch"></div>
+                </label>
+                <input type="password" id="roomPassword" placeholder="Enter session password..." style="margin-top: 12px; display: none;">
+            </div>
+
+            <button class="btn-submit" id="createBtn" onclick="App.createRoom()">Launch Environment</button>
+        </div>
+
+        <div class="card">
+            <div class="header">
+                <h2>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                    Your Dashboard
+                </h2>
+                <button class="icon-btn" onclick="App.loadDashboard()" title="Refresh List">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"></path><path d="M1 20v-6h6"></path><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
                 </button>
             </div>
+
+            <div id="loading-rooms" style="text-align: center; padding: 40px; color: var(--text-muted); font-size: 13px;">
+                Connecting to server...
+            </div>
+            
+            <div id="room-list" class="room-list"></div>
         </div>
+
     </div>
 
     <script>
-        const API_BASE = '/api'; // Assuming backend on same domain
+        const API_BASE = '/api';
+        const socket = io(); 
 
-        // --- AUTHENTICATION MODULE ---
-        const Auth = {
-            isSignup: false,
-            user: null,
-
-            init() {
-                const stored = localStorage.getItem('cc_user');
-                if (stored) {
-                    this.user = JSON.parse(stored);
-                    App.show(); // Show App View
-                } else {
-                    document.getElementById('auth-view').classList.add('active'); // Show Auth View
-                }
-            },
-
-            toggleMode() {
-                this.isSignup = !this.isSignup;
-                
-                // Animate/Swap Text
-                const btn = document.querySelector('#auth-btn span');
-                const toggle = document.getElementById('auth-toggle-text');
-                const nameGroup = document.getElementById('name-group');
-                const subtitle = document.getElementById('auth-subtitle');
-
-                if (this.isSignup) {
-                    btn.innerText = "Create Account";
-                    toggle.innerText = "Already have an account? Sign In";
-                    nameGroup.style.display = 'block';
-                    subtitle.innerText = "Create an account to start coding.";
-                } else {
-                    btn.innerText = "Sign In";
-                    toggle.innerText = "New here? Create an account";
-                    nameGroup.style.display = 'none';
-                    subtitle.innerText = "Sign in to access your collaborative workspace.";
-                }
-            },
-
-// Inside const Auth = { ... }
-
-async submit() {
-    const email = document.getElementById('auth-email').value;
-    const pass = document.getElementById('auth-pass').value;
-    const name = document.getElementById('auth-name').value;
-    const btn = document.getElementById('auth-btn');
-
-    if (!email || !pass) return alert("Please fill in all fields");
-
-    btn.classList.add('loading');
-
-    const endpoint = this.isSignup ? '/auth/signup' : '/auth/login';
-    
-    try {
-        // 1. Attempt the Network Request
-        const res = await fetch(API_BASE + endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password: pass, name })
-        });
-
-        // 2. Check if the response is valid JSON
-        const contentType = res.headers.get("content-type");
-        if (!contentType || !contentType.includes("application/json")) {
-            throw new Error("Server error: Received non-JSON response. Is MongoDB running?");
-        }
-
-        const data = await res.json();
-
-        // 3. Handle Logical Errors (e.g., "Wrong Password")
-        if (!res.ok || data.error) {
-            throw new Error(data.error || `Request failed with status ${res.status}`);
-        }
-
-        // 4. Success
-        this.user = data.user;
-        localStorage.setItem('cc_user', JSON.stringify(data.user));
-        
-        // Transition View
-        document.getElementById('auth-view').classList.remove('active');
-        setTimeout(() => App.show(), 300);
-
-    } catch (e) {
-        // 5. Handle Network Errors (e.g., Server Offline)
-        console.error("Login Error:", e);
-        alert(e.message || "Connection failed. Please ensure the server (port 3000) and MongoDB are running.");
-    } finally {
-        btn.classList.remove('loading');
-    }
-},
-
-            logout() {
-                localStorage.removeItem('cc_user');
-                location.reload();
-            }
-        };
-
-        // --- MAIN APPLICATION MODULE ---
         const App = {
             accessLevel: 'edit',
+            cachedRooms: [],
 
-            show() {
-                document.getElementById('app-view').classList.add('active');
-                document.getElementById('user-display-name').innerText = `Logged in as ${Auth.user.name}`;
+            init() {
+                // UI Toggles
+                document.getElementById('privateToggle').addEventListener('change', (e) => {
+                    const passInput = document.getElementById('roomPassword');
+                    if(e.target.checked) {
+                        passInput.style.display = 'block';
+                        setTimeout(() => passInput.focus(), 50);
+                    } else {
+                        passInput.style.display = 'none';
+                        passInput.value = '';
+                    }
+                });
+
+                // Close dropdowns when clicking outside
+                document.addEventListener('click', (e) => {
+                    if (!e.target.closest('.menu-wrapper')) {
+                        document.querySelectorAll('.dropdown').forEach(el => el.classList.remove('show'));
+                    }
+                });
+
+                // Socket Listeners
+                socket.emit('join_dashboard');
+                socket.on('roomUpdate', (data) => this.updateRoomMemberCount(data.roomId, data.activeUsers));
+                socket.on('roomExpired', (data) => this.markRoomExpired(data.roomId));
+                socket.on('roomCreated', (room) => this.addRoomToList(room, true));
+                
+                // NEW: Listeners for updates
+                socket.on('roomDeleted', (data) => this.removeRoomFromList(data.roomId));
+                socket.on('roomAccessChanged', (data) => this.updateAccessBadge(data.roomId, data.accessLevel));
+
+                this.loadDashboard();
             },
 
+            // --- API ACTIONS (DELETE / UPDATE) ---
+            async deleteRoom(roomId) {
+                // if(!confirm("Are you sure? This action cannot be undone.")) return;
+                
+                try {
+                    const res = await fetch(API_BASE + '/delete_room', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ roomId })
+                    });
+                    if(!res.ok) alert("Failed to delete room");
+                    // UI update handled via socket 'roomDeleted'
+                } catch(e) { alert("Connection Error"); }
+            },
+
+            async changeAccess(roomId, newAccess) {
+                try {
+                    const res = await fetch(API_BASE + '/update_room_access', {
+                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ roomId, accessLevel: newAccess })
+                    });
+                    if(!res.ok) alert("Failed to update settings");
+                    // UI update handled via socket 'roomAccessChanged'
+                } catch(e) { alert("Connection Error"); }
+            },
+
+            // --- UI HELPERS ---
+            toggleMenu(btn) {
+                // Close others
+                document.querySelectorAll('.dropdown').forEach(el => {
+                    if(el !== btn.nextElementSibling) el.classList.remove('show');
+                });
+                btn.nextElementSibling.classList.toggle('show');
+            },
+
+            removeRoomFromList(roomId) {
+                const el = document.getElementById(`room-${roomId}`);
+                if (el) {
+                    el.style.opacity = '0';
+                    el.style.transform = 'translateX(20px)';
+                    setTimeout(() => el.remove(), 300);
+                    this.cachedRooms = this.cachedRooms.filter(r => r.id !== roomId);
+                }
+            },
+
+            updateAccessBadge(roomId, level) {
+                const card = document.getElementById(`room-${roomId}`);
+                if (!card) return;
+                
+                // Update Badge
+                const badge = card.querySelector('.badge:not(.expired)');
+                if (badge) {
+                    badge.className = `badge ${level === 'edit' ? 'public' : 'private'}`;
+                    badge.innerText = level === 'edit' ? 'COLLABORATOR' : 'SPECTATOR';
+                }
+
+                // Update Menu Button Text
+                const btn = card.querySelector('.access-toggle-btn');
+                if (btn) {
+                    const newAction = level === 'edit' ? 'view' : 'edit';
+                    const newLabel = level === 'edit' ? 'Make View Only' : 'Make Editable';
+                    const icon = level === 'edit' ? '🔒' : '🔓';
+                    btn.innerHTML = `${icon} ${newLabel}`;
+                    btn.onclick = () => this.changeAccess(roomId, newAction);
+                }
+            },
+
+            // --- STANDARD LOGIC ---
             toggleAccess(level, el) {
                 this.accessLevel = level;
                 document.querySelectorAll('.radio-card').forEach(c => c.classList.remove('selected'));
                 el.classList.add('selected');
             },
 
-            togglePassword() {
-                const checked = document.getElementById('privateToggle').checked;
-                const section = document.getElementById('password-section');
-                const input = document.getElementById('roomPassword');
-                
-                if(checked) {
-                    section.classList.add('visible');
-                    setTimeout(() => input.focus(), 100);
+            checkDuplicateName() {
+                const nameInput = document.getElementById('roomName');
+                const errorMsg = document.getElementById('name-error');
+                const btn = document.getElementById('createBtn');
+                const enteredName = nameInput.value.trim().toLowerCase();
+                const exists = this.cachedRooms.some(r => r.name.toLowerCase() === enteredName && r.status !== 'expired');
+
+                if (exists) {
+                    nameInput.classList.add('error');
+                    errorMsg.style.display = 'block';
+                    btn.disabled = true;
+                    btn.innerText = "Name Taken";
                 } else {
-                    section.classList.remove('visible');
-                    input.value = '';
+                    nameInput.classList.remove('error');
+                    errorMsg.style.display = 'none';
+                    btn.disabled = false;
+                    btn.innerText = "Launch Environment";
                 }
+                return exists;
             },
 
             async createRoom() {
+                if (this.checkDuplicateName()) return;
                 const btn = document.getElementById('createBtn');
                 const payload = {
-                    name: document.getElementById('roomName').value || "Untitled Project",
+                    name: document.getElementById('roomName').value || "Untitled",
                     language: document.getElementById('language').value,
                     expiry: document.getElementById('expiry').value,
                     accessLevel: this.accessLevel,
@@ -502,34 +358,134 @@ async submit() {
                     password: document.getElementById('roomPassword').value
                 };
 
-                btn.classList.add('loading');
+                btn.innerText = "Creating...";
+                btn.disabled = true;
 
                 try {
                     const res = await fetch(API_BASE + '/create_room', {
-                        method: 'POST',
-                        headers: { 
-                            'Content-Type': 'application/json',
-                            'Authorization': Auth.user.id // Send ID for backend check
-                        },
-                        body: JSON.stringify(payload)
+                        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
                     });
-
                     const data = await res.json();
-                    
-                    if (data.id) {
-                        setTimeout(() => window.location.href = `/room/${data.id}`, 500);
-                    } else {
-                        throw new Error("Failed to create room");
+                    if (data.id) window.location.href = `/room/${data.id}`;
+                    else { alert("Error: " + (data.error || "Unknown")); btn.disabled = false; btn.innerText = "Launch Environment"; }
+                } catch (e) { alert("Connection failed."); btn.disabled = false; btn.innerText = "Launch Environment"; }
+            },
+
+            async loadDashboard() {
+                const list = document.getElementById('room-list');
+                const loader = document.getElementById('loading-rooms');
+                
+                try {
+                    const res = await fetch(API_BASE + '/dashboard');
+                    if (res.status === 401 || res.redirected) { window.location.href = '/login?next=/'; return; }
+                    const data = await res.json();
+                    loader.style.display = 'none';
+                    list.innerHTML = '';
+                    this.cachedRooms = data.rooms || [];
+
+                    if (!this.cachedRooms.length) {
+                        list.innerHTML = `<div style="text-align:center; padding:30px; color:var(--text-muted); opacity:0.7;"><div style="font-size:13px;">No active sessions</div></div>`;
+                        return;
                     }
-                } catch (e) {
-                    alert(e.message);
-                    btn.classList.remove('loading');
+                    this.cachedRooms.forEach(room => this.addRoomToList(room));
+                } catch (e) { loader.innerText = "Failed to load rooms."; }
+            },
+
+            addRoomToList(room, prepend = false) {
+                const list = document.getElementById('room-list');
+                const isExpired = room.status === 'expired';
+                if (prepend) this.cachedRooms.unshift(room);
+
+                const item = document.createElement('div');
+                item.className = `room-item ${isExpired ? 'expired' : ''}`;
+                item.id = `room-${room.id}`;
+                
+                const userCountColor = (room.activeUsers > 0 && !isExpired) ? 'color:var(--primary)' : '';
+                
+                // Logic for menu actions
+                const nextAccess = room.access === 'edit' ? 'view' : 'edit';
+                const nextLabel = room.access === 'edit' ? 'Make View Only' : 'Make Editable';
+                const accessIcon = room.access === 'edit' ? '🔒' : '🔓';
+
+                item.innerHTML = `
+                    <div class="room-info">
+                        <h3>
+                            ${room.name}
+                            ${isExpired ? '<span class="badge expired">EXPIRED</span>' : ''}
+                        </h3>
+                        <div class="room-meta">
+                            <span style="text-transform: capitalize;">${room.language}</span>
+                            <span>•</span>
+                            <span class="badge ${room.access === 'edit' ? 'public' : 'private'}">${room.access === 'edit' ? 'COLLABORATOR' : 'SPECTATOR'}</span>
+                            <span>•</span>
+                            <span style="display:flex; align-items:center; gap:5px; ${userCountColor}" class="user-indicator">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                                <span class="member-count">${room.activeUsers || 0}</span>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <div class="actions-group">
+                        <button class="join-btn" onclick="window.location.href='/room/${room.id}'">
+                            ${isExpired ? 'View' : 'Open'}
+                        </button>
+                        
+                        ${!isExpired ? `
+                        <div class="menu-wrapper">
+                            <button class="menu-btn" onclick="App.toggleMenu(this)">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="1"></circle><circle cx="12" cy="5" r="1"></circle><circle cx="12" cy="19" r="1"></circle></svg>
+                            </button>
+                            <div class="dropdown">
+                                <button class="dropdown-item access-toggle-btn" onclick="App.changeAccess('${room.id}', '${nextAccess}')">
+                                    ${accessIcon} ${nextLabel}
+                                </button>
+                                <button class="dropdown-item danger" onclick="App.deleteRoom('${room.id}')">
+                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                    Delete Room
+                                </button>
+                            </div>
+                        </div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                if (prepend) list.prepend(item);
+                else list.appendChild(item);
+            },
+
+            updateRoomMemberCount(roomId, count) {
+                const el = document.querySelector(`#room-${roomId} .member-count`);
+                const wrapper = document.querySelector(`#room-${roomId} .user-indicator`);
+                if (el && wrapper) {
+                    el.innerText = count;
+                    wrapper.style.color = count > 0 ? 'var(--primary)' : 'var(--text-muted)';
+                }
+            },
+
+            markRoomExpired(roomId) {
+                const card = document.getElementById(`room-${roomId}`);
+                if (card && !card.classList.contains('expired')) {
+                    card.classList.add('expired');
+                    
+                    if (!card.querySelector('.badge.expired')) {
+                        const title = card.querySelector('h3');
+                        title.innerHTML += ' <span class="badge expired">EXPIRED</span>';
+                    }
+                    
+                    const btn = card.querySelector('.join-btn');
+                    btn.innerText = 'View';
+                    
+                    // Hide Menu for expired rooms
+                    const menu = card.querySelector('.menu-wrapper');
+                    if(menu) menu.style.display = 'none';
+                    
+                    const cached = this.cachedRooms.find(r => r.id === roomId);
+                    if (cached) cached.status = 'expired';
                 }
             }
         };
 
-        // Start
-        Auth.init();
+        App.init();
     </script>
 </body>
 </html>

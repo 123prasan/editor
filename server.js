@@ -4,32 +4,33 @@ const { Server } = require("socket.io");
 const cors = require("cors");
 const path = require("path");
 const mongoose = require("mongoose");
+const cookieParser = require("cookie-parser");
 
 /* ==========================================================================
    1. DATABASE MODELS
    ========================================================================== */
 
-// --- User Schema ---
 const userSchema = new mongoose.Schema({
     email: { type: String, required: true, unique: true },
-    password: { type: String, required: true }, // NOTE: In production, use bcrypt to hash this!
+    password: { type: String, required: true },
     name: { type: String, required: true },
     createdAt: { type: Date, default: Date.now }
 });
 const User = mongoose.model('User', userSchema);
 
-// --- Room Schema ---
 const roomSchema = new mongoose.Schema({
     roomId: { type: String, required: true, unique: true },
-    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     name: { type: String, default: "Untitled Session" },
     language: { type: String, default: "javascript" },
-    accessLevel: { type: String, default: "edit" }, 
+    accessLevel: { type: String, default: "edit" },
     isPrivate: { type: Boolean, default: false },
     password: { type: String, default: null },
-    expiresAt: { type: Date, default: null },
+    expiresAt: { type: Date, default: null, expires: 0 },
     content: { type: String, default: "" },
     version: { type: Number, default: 0 },
+    // --- UPDATED: Track Banned Users ---
+    bannedUsers: [{ type: String }], 
     lastActive: { type: Date, default: Date.now },
     createdAt: { type: Date, default: Date.now }
 });
@@ -40,10 +41,13 @@ const Room = mongoose.model('Room', roomSchema);
    ========================================================================== */
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
 
 app.use(cors({ origin: "*", methods: ["GET", "POST"] }));
-app.use(express.json()); 
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
@@ -54,9 +58,12 @@ mongoose.connect("mongodb://127.0.0.1:27017/collabcode_pro")
     .then(() => console.log("✅ MongoDB connected successfully"))
     .catch(err => console.error("❌ MongoDB connection error:", err));
 
-// --- Auth Middleware ---
+// Global Room State (In-Memory)
+const roomState = {};
+
+// --- API Auth Middleware ---
 const requireAuth = async (req, res, next) => {
-    const userId = req.headers['authorization'];
+    const userId = req.headers['authorization'] || req.cookies['auth_token'];
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
     try {
@@ -69,14 +76,61 @@ const requireAuth = async (req, res, next) => {
     }
 };
 
+// --- Page Auth Middleware ---
+const requirePageLogin = async (req, res, next) => {
+    const userId = req.cookies['auth_token'];
+    if (!userId) {
+        const targetUrl = encodeURIComponent(req.originalUrl);
+        return res.redirect(`/?next=${targetUrl}`);
+    }
+    try {
+        const user = await User.findById(userId);
+        if (!user) {
+            res.clearCookie('auth_token');
+            return res.redirect(`/?next=${encodeURIComponent(req.originalUrl)}`);
+        }
+        req.user = user;
+        next();
+    } catch (e) {
+        return res.redirect(`/?next=${encodeURIComponent(req.originalUrl)}`);
+    }
+};
+
 /* ==========================================================================
    3. API ROUTES (REST)
    ========================================================================== */
 
 app.get("/", (req, res) => res.render("index"));
-app.get("/room/:id", (req, res) => res.render("room", { roomid: req.params.id }));
 
-// --- Auth Endpoints ---
+app.get("/login", (req, res) => {
+    if (req.cookies['auth_token']) return res.redirect('/');
+    res.render("login");
+});
+
+app.get("/room/:id", requirePageLogin, async (req, res) => {
+    try {
+        const room = await Room.findOne({ roomId: req.params.id });
+        if (!room) return res.status(404).send("Room not found");
+
+        const isOwner = room.ownerId.toString() === req.user._id.toString();
+        const requiresPassword = room.isPrivate && !isOwner;
+
+        // NEW: Check if banned before rendering
+        if (room.bannedUsers && room.bannedUsers.includes(req.user._id.toString())) {
+            return res.status(403).send("You have been banned from this room.");
+        }
+
+        res.render("room", {
+            roomid: req.params.id,
+            user: req.user,
+            requiresPassword,
+            isOwner
+        });
+    } catch (e) {
+        res.status(500).send("Server Error");
+    }
+});
+
 app.post("/api/auth/signup", async (req, res) => {
     try {
         const { email, password, name } = req.body;
@@ -84,6 +138,7 @@ app.post("/api/auth/signup", async (req, res) => {
         if (existing) return res.status(400).json({ error: "Email already in use" });
 
         const user = await User.create({ email, password, name });
+        res.cookie('auth_token', user._id.toString(), { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
         res.json({ user: { id: user._id, name: user.name, email: user.email } });
     } catch (e) { res.status(500).json({ error: "Signup failed" }); }
 });
@@ -93,25 +148,86 @@ app.post("/api/auth/login", async (req, res) => {
         const { email, password } = req.body;
         const user = await User.findOne({ email, password });
         if (!user) return res.status(400).json({ error: "Invalid credentials" });
+
+        res.cookie('auth_token', user._id.toString(), { httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 });
         res.json({ user: { id: user._id, name: user.name, email: user.email } });
     } catch (e) { res.status(500).json({ error: "Login failed" }); }
 });
 
-// --- Dashboard Endpoints ---
 app.get("/api/dashboard", requireAuth, async (req, res) => {
     try {
         const rooms = await Room.find({ ownerId: req.user._id }).sort({ createdAt: -1 });
         const now = new Date();
-        const roomData = rooms.map(r => ({
-            id: r.roomId,
-            name: r.name,
-            language: r.language,
-            access: r.accessLevel,
-            status: (r.expiresAt && r.expiresAt < now) ? 'expired' : 'active',
-            createdAt: r.createdAt
-        }));
+        const roomData = rooms.map(r => {
+            const activeCount = roomState[r.roomId]?.users?.length || 0;
+            return {
+                id: r.roomId,
+                name: r.name,
+                language: r.language,
+                access: r.accessLevel,
+                status: (r.expiresAt && r.expiresAt < now) ? 'expired' : 'active',
+                createdAt: r.createdAt,
+                activeUsers: activeCount
+            };
+        });
         res.json({ rooms: roomData });
     } catch (e) { res.status(500).json({ error: "Failed to fetch dashboard" }); }
+});
+
+app.post("/api/delete_room", requireAuth, async (req, res) => {
+    try {
+        const { roomId } = req.body;
+        const room = await Room.findOne({ roomId, ownerId: req.user._id });
+
+        if (!room) return res.status(403).json({ error: "Not authorized or room not found" });
+
+        await Room.deleteOne({ roomId });
+
+        if (roomState[roomId]) {
+            io.to(roomId).emit('roomDestroyed');
+            io.in(roomId).disconnectSockets();
+            delete roomState[roomId];
+        }
+
+        io.to('dashboard').emit('roomDeleted', { roomId });
+        res.json({ success: true });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Deletion failed" });
+    }
+});
+
+app.post("/api/update_room_access", requireAuth, async (req, res) => {
+    try {
+        const { roomId, accessLevel } = req.body;
+        const room = await Room.findOneAndUpdate(
+            { roomId, ownerId: req.user._id },
+            { accessLevel },
+            { new: true }
+        );
+
+        if (!room) return res.status(403).json({ error: "Not authorized" });
+
+        if (roomState[roomId]) {
+            roomState[roomId].accessLevel = accessLevel;
+            const sockets = await io.in(roomId).fetchSockets();
+            for (const socket of sockets) {
+                const isOwner = roomState[roomId].ownerId.toString() === socket.userId;
+                const newAccess = isOwner ? 'edit' : accessLevel;
+                socket.emit("syncSnapshot", {
+                    ...roomState[roomId],
+                    accessLevel: newAccess,
+                    isOwner
+                });
+            }
+        }
+
+        io.to('dashboard').emit('roomAccessChanged', { roomId, accessLevel });
+        res.json({ success: true });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ error: "Update failed" });
+    }
 });
 
 app.post("/api/create_room", requireAuth, async (req, res) => {
@@ -126,7 +242,7 @@ app.post("/api/create_room", requireAuth, async (req, res) => {
             if (timeMap[expiry]) expiresAt = new Date(now.getTime() + timeMap[expiry]);
         }
 
-        await Room.create({
+        const newRoom = await Room.create({
             roomId,
             ownerId: req.user._id,
             name: name || "Untitled Session",
@@ -136,35 +252,56 @@ app.post("/api/create_room", requireAuth, async (req, res) => {
             password: password || null,
             expiresAt,
             content: "",
-            version: 0
+            version: 0,
+            bannedUsers: [] // Initialize empty list
         });
 
-        // Initialize Hot Memory
         roomState[roomId] = {
             content: "", version: 0, language,
             expiry: expiresAt ? expiresAt.toISOString() : null,
-            accessLevel: accessLevel
+            accessLevel: accessLevel,
+            ownerId: req.user._id,
+            isPrivate: !!isPrivate,
+            password: password || null,
+            bannedUsers: [], // Initialize in memory
+            users: []
         };
+
+        io.to('dashboard').emit('roomCreated', {
+            id: roomId,
+            name: newRoom.name,
+            language: newRoom.language,
+            access: newRoom.accessLevel,
+            activeUsers: 0,
+            status: 'active',
+            ownerId: req.user._id.toString()
+        });
 
         res.json({ id: roomId });
     } catch (e) { console.error(e); res.status(500).json({ error: "Creation failed" }); }
 });
 
 /* ==========================================================================
-   4. WEBSOCKET SERVER (REAL-TIME ENGINE)
+   4. WEBSOCKET SERVER
    ========================================================================== */
 
-const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: "*", methods: ["GET", "POST"] } });
-
-const roomState = {}; 
-
-
+io.use((socket, next) => {
+    const cookieHeader = socket.request.headers.cookie;
+    if (cookieHeader) {
+        const token = cookieHeader.split('; ').find(row => row.startsWith('auth_token='));
+        if (token) socket.userId = token.split('=')[1];
+    }
+    next();
+});
 
 io.on("connection", (socket) => {
 
-    /* ---- JOIN & HYDRATE ---- */
-    socket.on("join_room", async (roomId) => {
+    socket.on('join_dashboard', () => socket.join('dashboard'));
+
+    socket.on("join_room", async (data) => {
+        const roomId = typeof data === 'object' ? data.roomId : data;
+        const providedPassword = typeof data === 'object' ? data.password : null;
+
         socket.join(roomId);
         socket.roomId = roomId;
 
@@ -178,7 +315,10 @@ io.on("connection", (socket) => {
                     expiry: room.expiresAt ? room.expiresAt.toISOString() : null,
                     accessLevel: room.accessLevel,
                     users: [],
-                    ownerId: room.ownerId
+                    ownerId: room.ownerId,
+                    isPrivate: room.isPrivate,
+                    password: room.password,
+                    bannedUsers: room.bannedUsers || [] // Load bans from DB
                 };
             } else {
                 roomState[roomId] = { content: "", version: 0, language: "javascript", expiry: null, accessLevel: 'edit', users: [], ownerId: null };
@@ -186,70 +326,151 @@ io.on("connection", (socket) => {
         }
 
         const state = roomState[roomId];
+        const isOwner = state.ownerId && socket.userId && (state.ownerId.toString() === socket.userId);
+
+        // --- BAN CHECK ---
+        // If user is logged in (has userId) AND is in the banned list
+        if (socket.userId && state.bannedUsers && state.bannedUsers.includes(socket.userId)) {
+            socket.emit("error", "You have been banned from this room.");
+            socket.disconnect();
+            return;
+        }
+
+        // Security Check (Password)
+        if (state.isPrivate && !isOwner) {
+            if (state.password !== providedPassword) {
+                socket.emit("error", "Invalid Password");
+                socket.disconnect();
+                return;
+            }
+        }
+
+        let username = `Guest-${socket.id.slice(0, 4)}`;
+        if (socket.userId) {
+            const dbUser = await User.findById(socket.userId);
+            if (dbUser) username = dbUser.name;
+        }
+
+        const user = { id: socket.id, username };
+
+        if (!state.users) state.users = [];
+        if (!state.users.find(u => u.id === socket.id)) {
+            state.users.push(user);
+        }
+
         let effectiveAccess = state.accessLevel;
         let isTimeBounded = false;
         let remainingSeconds = null;
 
-        if (state.expiry && new Date(state.expiry) < new Date()) {
-            effectiveAccess = 'view';
-        } else if (state.expiry) {
-            isTimeBounded = true;
-            remainingSeconds = Math.max(0, Math.floor((new Date(state.expiry) - new Date()) / 1000));
+        if (state.expiry) {
+            if (new Date(state.expiry) < new Date()) {
+                effectiveAccess = 'view';
+            } else {
+                isTimeBounded = true;
+                remainingSeconds = Math.max(0, Math.floor((new Date(state.expiry) - new Date()) / 1000));
+            }
         }
+        if (isOwner) effectiveAccess = 'edit';
 
-        // Track user
-        const user = { id: socket.id, username: `User-${socket.id.slice(0, 5)}` };
-        if (!state.users) state.users = [];
-        state.users.push(user);
+        io.to('dashboard').emit('roomUpdate', { roomId, activeUsers: state.users.length });
 
         socket.emit("syncSnapshot", {
             content: state.content,
             version: state.version,
             language: state.language,
-            expiry: state.expiry,       
+            expiry: state.expiry,
             accessLevel: effectiveAccess,
-            remainingSeconds: remainingSeconds,
-            isTimeBounded: isTimeBounded,
+            isOwner,
+            remainingSeconds,
+            isTimeBounded,
             users: state.users,
             ownerId: state.ownerId
         });
 
-        // Notify others that user joined
         socket.to(roomId).emit("userJoined", {
-            user: user,
+            user,
             users: state.users,
             ownerId: state.ownerId
         });
     });
 
-    /* ---- EDITOR OPS ---- */
+    // --- KICK & BAN HANDLER ---
+    socket.on('kick_user', async ({ targetSocketId }) => {
+        const roomId = socket.roomId;
+        if (!roomId || !roomState[roomId]) return;
+
+        // 1. Verify Owner
+        const isOwner = roomState[roomId].ownerId && socket.userId && 
+                        (roomState[roomId].ownerId.toString() === socket.userId);
+        
+        if (!isOwner) return;
+
+        // 2. Identify Target
+        const targetSocket = io.sockets.sockets.get(targetSocketId);
+        if (!targetSocket) return;
+
+        // 3. Add to Ban List (if they are a logged-in user)
+        if (targetSocket.userId) {
+            // Update Memory
+            if (!roomState[roomId].bannedUsers) roomState[roomId].bannedUsers = [];
+            if (!roomState[roomId].bannedUsers.includes(targetSocket.userId)) {
+                roomState[roomId].bannedUsers.push(targetSocket.userId);
+                
+                // Persist to DB
+                await Room.updateOne(
+                    { roomId }, 
+                    { $addToSet: { bannedUsers: targetSocket.userId } }
+                );
+            }
+        }
+
+        // 4. Kick
+        io.to(targetSocketId).emit('kicked');
+        targetSocket.disconnect();
+    });
+
+    // ... (rest of editor events: destroy_room, editorOp, etc.) ...
+    
+    socket.on("destroy_room", async () => {
+        const roomId = socket.roomId;
+        if (!roomId || !roomState[roomId]) return;
+        const isOwner = roomState[roomId].ownerId && socket.userId && (roomState[roomId].ownerId.toString() === socket.userId);
+        if (isOwner) {
+            io.to(roomId).emit("roomDestroyed");
+            io.in(roomId).disconnectSockets();
+            delete roomState[roomId];
+            await Room.deleteOne({ roomId });
+            io.to('dashboard').emit('roomExpired', { roomId });
+        }
+    });
+
     socket.on("editorOp", ({ roomId, changes, baseVersion }) => {
         const state = roomState[roomId];
         if (!state) return;
-
         if (state.expiry && new Date(state.expiry) < new Date()) {
-            socket.emit("resync", { ...state, accessLevel: 'view' });
-            return;
+            const isOwner = state.ownerId && socket.userId && (state.ownerId.toString() === socket.userId);
+            if (!isOwner) {
+                socket.emit("resync", { ...state, accessLevel: 'view' });
+                return;
+            }
         }
-
         state.content = applyChanges(state.content, changes);
         state.version++;
-
         socket.emit("ack", { version: state.version });
         socket.to(roomId).emit("editorOp", { changes, version: state.version });
     });
 
-    /* ---- LANGUAGE ---- */
     socket.on("languageChange", async ({ roomId, language }) => {
         if (!roomState[roomId]) return;
-        if (roomState[roomId].expiry && new Date(roomState[roomId].expiry) < new Date()) return;
-
+        if (roomState[roomId].expiry && new Date(roomState[roomId].expiry) < new Date()) {
+            const isOwner = roomState[roomId].ownerId && socket.userId && (roomState[roomId].ownerId.toString() === socket.userId);
+            if (!isOwner) return;
+        }
         roomState[roomId].language = language;
         socket.to(roomId).emit("languageUpdate", language);
         await Room.updateOne({ roomId }, { language });
     });
 
-    /* ---- CURSOR & SELECTION (UPDATED) ---- */
     socket.on("cursorMove", (data) => {
         socket.to(data.roomId).emit("cursorUpdate", { userId: socket.id, position: data.position });
     });
@@ -258,36 +479,31 @@ io.on("connection", (socket) => {
         socket.to(data.roomId).emit("selectionUpdate", { userId: socket.id, selection: data.selection });
     });
 
-    // **NEW: Broadcast Selection Clear**
     socket.on("selectionClear", ({ roomId }) => {
         socket.to(roomId).emit("selectionClear", socket.id);
     });
 
-    /* ---- DISCONNECT ---- */
     socket.on("disconnect", async () => {
         const roomId = socket.roomId;
         if (!roomId) return;
 
-        // Remove user from room state
         if (roomState[roomId] && roomState[roomId].users) {
-            const user = roomState[roomId].users.find(u => u.id === socket.id);
-            if (user) {
-                roomState[roomId].users = roomState[roomId].users.filter(u => u.id !== socket.id);
-                socket.to(roomId).emit("userLeft", {
-                    userId: socket.id,
-                    username: user.username,
-                    users: roomState[roomId].users,
-                    ownerId: roomState[roomId].ownerId
-                });
-            }
-        }
+            roomState[roomId].users = roomState[roomId].users.filter(u => u.id !== socket.id);
+            io.to('dashboard').emit('roomUpdate', { roomId, activeUsers: roomState[roomId].users.length });
 
+            socket.to(roomId).emit("userLeft", {
+                userId: socket.id,
+                users: roomState[roomId].users,
+                ownerId: roomState[roomId].ownerId
+            });
+        }
         socket.to(roomId).emit("userDisconnected", socket.id);
 
         const roomSize = io.sockets.adapter.rooms.get(roomId)?.size || 0;
         if (roomSize === 0 && roomState[roomId]) {
             await saveRoomToDB(roomId);
             delete roomState[roomId];
+            io.to('dashboard').emit('roomUpdate', { roomId, activeUsers: 0 });
         }
     });
 });
@@ -297,7 +513,19 @@ io.on("connection", (socket) => {
    ========================================================================== */
 
 setInterval(async () => {
-    for (const roomId in roomState) await saveRoomToDB(roomId);
+    const now = new Date();
+    for (const roomId in roomState) {
+        if (roomState[roomId].expiry && new Date(roomState[roomId].expiry) < now) {
+            io.to('dashboard').emit('roomExpired', { roomId });
+            io.to(roomId).emit("roomDestroyed");
+            io.in(roomId).disconnectSockets();
+            delete roomState[roomId];
+            await Room.deleteOne({ roomId });
+            console.log(`Room ${roomId} auto-destroyed.`);
+            continue;
+        }
+        await saveRoomToDB(roomId);
+    }
 }, 5000);
 
 async function saveRoomToDB(roomId) {
@@ -314,7 +542,6 @@ function applyChanges(content, changes) {
         const end = getIndexFromPosition(content, change.range.endLineNumber, change.range.endColumn);
         return { start, end, text: change.text };
     }).sort((a, b) => b.start - a.start);
-
     let text = content;
     for (const edit of edits) text = text.slice(0, edit.start) + edit.text + text.slice(edit.end);
     return text;

@@ -3,17 +3,19 @@ const mongoose = require('mongoose');
 
 const roomSchema = new mongoose.Schema({
     roomId: { type: String, required: true, unique: true },
+    
+    // --- ADD THIS FIELD ---
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, 
+    
     content: { type: String, default: "" },
     language: { type: String, default: "javascript" },
     version: { type: Number, default: 0 },
-    
-    // --- NEW CONFIGURATION FIELDS ---
     name: { type: String, default: "Untitled Room" },
     accessLevel: { type: String, enum: ['edit', 'view'], default: 'edit' },
     isPrivate: { type: Boolean, default: false },
-    password: { type: String, default: null }, // Store raw or hashed (raw for simplicity now)
-    expiresAt: { type: Date, default: null },   // Null = never
-    createdAt: { type: Date, default: Date.now } // For cleanup logic
+    password: { type: String, default: null },
+    expiresAt: { type: Date, default: null },
+    createdAt: { type: Date, default: Date.now }
 });
 
 // Auto-delete index for expiring rooms

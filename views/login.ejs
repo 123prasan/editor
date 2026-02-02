@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In | CollabCode</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --bg-app: #09090b;
+            --primary: #10b981;
+            --primary-dark: #059669;
+            --primary-glow: rgba(16, 185, 129, 0.2);
+            --danger: #ef4444;
+            --text-main: #f4f4f5;
+            --text-muted: #a1a1aa;
+            --border-color: #27272a;
+            --radius-lg: 12px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
+
+        body {
+            background-color: var(--bg-app);
+            background-image: 
+                radial-gradient(at 50% 0%, rgba(16, 185, 129, 0.1) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(59, 130, 246, 0.05) 0px, transparent 50%);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* --- CARD --- */
+        .auth-card {
+            width: 100%;
+            max-width: 400px;
+            background: rgba(24, 24, 27, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Loading Bar at top */
+        .loading-bar {
+            position: absolute; top: 0; left: 0; height: 3px; width: 100%;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            transform: translateX(-100%);
+            transition: opacity 0.3s;
+            opacity: 0;
+        }
+        .loading-bar.active {
+            opacity: 1;
+            animation: loading 1.5s infinite;
+        }
+        @keyframes loading { 100% { transform: translateX(100%); } }
+
+        /* --- HEADER --- */
+        .header { text-align: center; margin-bottom: 32px; }
+        .logo {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 48px; height: 48px;
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--primary);
+            border-radius: 12px;
+            margin-bottom: 16px;
+            border: 1px solid rgba(16, 185, 129, 0.2);
+        }
+        .header h1 { font-size: 24px; font-weight: 700; letter-spacing: -0.02em; margin-bottom: 8px; }
+        .header p { color: var(--text-muted); font-size: 14px; }
+
+        /* --- FORM --- */
+        .form-group { margin-bottom: 20px; }
+        label { display: block; font-size: 13px; font-weight: 500; color: var(--text-muted); margin-bottom: 8px; }
+        
+        input {
+            width: 100%; height: 46px;
+            background: #18181b; 
+            border: 1px solid var(--border-color);
+            color: var(--text-main); 
+            padding: 0 16px; 
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+        input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-glow); }
+        
+        /* Expandable Name Field */
+        #name-container {
+            max-height: 0; overflow: hidden; opacity: 0;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        #name-container.visible { max-height: 100px; opacity: 1; margin-bottom: 20px; }
+
+        .btn-primary {
+            width: 100%; height: 48px;
+            background: var(--primary); color: #000;
+            border: none; border-radius: 8px;
+            font-weight: 600; font-size: 15px;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+            margin-top: 10px;
+        }
+        .btn-primary:hover { background: var(--primary-dark); }
+        .btn-primary:active { transform: scale(0.98); }
+        .btn-primary:disabled { opacity: 0.7; cursor: wait; }
+
+        .toggle-text {
+            text-align: center; margin-top: 24px; font-size: 13px; color: var(--text-muted);
+        }
+        .toggle-link {
+            color: var(--primary); font-weight: 600; cursor: pointer; margin-left: 4px;
+            transition: color 0.2s;
+        }
+        .toggle-link:hover { color: var(--primary-dark); text-decoration: underline; }
+
+        .error-msg {
+            background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2);
+            color: var(--danger); padding: 12px; border-radius: 8px; font-size: 13px;
+            margin-bottom: 20px; text-align: center; display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="auth-card">
+        <div class="loading-bar" id="loader"></div>
+
+        <div class="header">
+            <div class="logo">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+            </div>
+            <h1 id="title">Welcome back</h1>
+            <p id="subtitle">Enter your credentials to access the workspace.</p>
+        </div>
+
+        <div id="error-box" class="error-msg"></div>
+
+        <form id="authForm" onsubmit="Auth.submit(event)">
+            <div id="name-container">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" id="name" placeholder="John Doe">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" id="email" placeholder="name@company.com" required>
+            </div>
+
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="••••••••" required>
+            </div>
+
+            <button type="submit" class="btn-primary" id="submitBtn">Sign In</button>
+        </form>
+
+        <div class="toggle-text">
+            <span id="toggleQuestion">Don't have an account?</span>
+            <span class="toggle-link" onclick="Auth.toggleMode()" id="toggleBtn">Create one</span>
+        </div>
+    </div>
+
+    <script>
+        const Auth = {
+            isSignup: false,
+
+            toggleMode() {
+                this.isSignup = !this.isSignup;
+                const nameContainer = document.getElementById('name-container');
+                const title = document.getElementById('title');
+                const subtitle = document.getElementById('subtitle');
+                const btn = document.getElementById('submitBtn');
+                const question = document.getElementById('toggleQuestion');
+                const toggleBtn = document.getElementById('toggleBtn');
+                const errorBox = document.getElementById('error-box');
+
+                // Clear errors
+                errorBox.style.display = 'none';
+
+                if (this.isSignup) {
+                    nameContainer.classList.add('visible');
+                    document.getElementById('name').required = true;
+                    title.innerText = "Create Account";
+                    subtitle.innerText = "Start collaborating with your team today.";
+                    btn.innerText = "Create Account";
+                    question.innerText = "Already have an account?";
+                    toggleBtn.innerText = "Sign In";
+                } else {
+                    nameContainer.classList.remove('visible');
+                    document.getElementById('name').required = false;
+                    title.innerText = "Welcome back";
+                    subtitle.innerText = "Enter your credentials to access the workspace.";
+                    btn.innerText = "Sign In";
+                    question.innerText = "Don't have an account?";
+                    toggleBtn.innerText = "Create one";
+                }
+            },
+
+            async submit(e) {
+                e.preventDefault();
+                
+                const btn = document.getElementById('submitBtn');
+                const loader = document.getElementById('loader');
+                const errorBox = document.getElementById('error-box');
+                
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                const name = document.getElementById('name').value;
+
+                // UI Loading State
+                btn.disabled = true;
+                loader.classList.add('active');
+                errorBox.style.display = 'none';
+
+                const endpoint = this.isSignup ? '/api/auth/signup' : '/api/auth/login';
+                const payload = this.isSignup ? { email, password, name } : { email, password };
+
+                try {
+                    const res = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await res.json();
+
+                    if (res.ok) {
+                        // Check URL params for redirect target (e.g., ?next=/room/123)
+                        const urlParams = new URLSearchParams(window.location.search);
+                        const nextUrl = urlParams.get('next') || '/';
+                        
+                        // Small delay for UX
+                        setTimeout(() => {
+                            window.location.href = nextUrl;
+                        }, 500);
+                    } else {
+                        throw new Error(data.error || "Authentication failed");
+                    }
+
+                } catch (err) {
+                    errorBox.innerText = err.message;
+                    errorBox.style.display = 'block';
+                    btn.disabled = false;
+                    loader.classList.remove('active');
+                }
+            }
+        };
+    </script>
+</body>
+</html>

@@ -4,14 +4,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CollabCode Enterprise | Room <%= roomid %>
-    </title>
+    <title>CollabCode Enterprise | Room <%= roomid %></title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 
     <script src="https://unpkg.com/lucide@latest"></script>
 
@@ -35,281 +32,138 @@
             --font-code: 'JetBrains Mono', monospace;
         }
 
-        * {
-            box-sizing: border-box;
-            outline: none;
-        }
+        * { box-sizing: border-box; outline: none; }
 
         body {
-            margin: 0;
-            background: var(--bg-app);
-            color: var(--text-main);
-            font-family: var(--font-ui);
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+            margin: 0; background: var(--bg-app); color: var(--text-main);
+            font-family: var(--font-ui); height: 100vh; display: flex;
+            flex-direction: column; overflow: hidden;
         }
 
         /* --- LAYOUT --- */
         .app-header {
-            height: var(--header-h);
-            background: rgba(9, 9, 11, 0.95);
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 16px;
-            z-index: 50;
+            height: var(--header-h); background: rgba(9, 9, 11, 0.95);
+            border-bottom: 1px solid var(--border); display: flex;
+            align-items: center; justify-content: space-between; padding: 0 16px; z-index: 50;
         }
 
-        .workspace {
-            display: flex;
-            flex: 1;
-            height: calc(100vh - var(--header-h) - 28px);
-            position: relative;
-        }
+        .workspace { display: flex; flex: 1; height: calc(100vh - var(--header-h) - 28px); position: relative; }
 
         .sidebar {
-            width: 260px;
-            background: var(--bg-sidebar);
-            border-right: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
-            transition: transform 0.3s;
-            z-index: 20;
+            width: 260px; background: var(--bg-sidebar); border-right: 1px solid var(--border);
+            display: flex; flex-direction: column; transition: transform 0.3s; z-index: 20;
         }
 
-        .editor-region {
-            flex: 1;
-            position: relative;
-            min-width: 0;
-        }
+        .editor-region { flex: 1; position: relative; min-width: 0; }
 
         .output-region {
-            width: 350px;
-            background: var(--bg-panel);
-            border-left: 1px solid var(--border);
-            display: flex;
-            flex-direction: column;
+            width: 350px; background: var(--bg-panel); border-left: 1px solid var(--border);
+            display: flex; flex-direction: column;
         }
 
         /* --- COMPONENTS --- */
         .btn {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            height: 32px;
-            padding: 0 12px;
-            border-radius: 6px;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            border: none;
-            transition: 0.2s;
+            display: inline-flex; align-items: center; justify-content: center;
+            height: 32px; padding: 0 12px; border-radius: 6px; font-size: 13px;
+            font-weight: 600; cursor: pointer; border: none; transition: 0.2s;
         }
 
-        .btn-primary {
-            background: var(--primary);
-            color: #000;
-        }
+        .btn-primary { background: var(--primary); color: #000; }
+        .btn-primary:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); }
 
-        .btn-primary:hover:not(:disabled) {
-            background: var(--primary-hover);
-            transform: translateY(-1px);
-        }
-
-        .btn-icon {
-            background: transparent;
-            color: var(--text-muted);
-            width: 32px;
-            padding: 0;
-        }
-
-        .btn-icon:hover {
-            background: var(--bg-active);
-            color: var(--text-main);
-        }
+        .btn-icon { background: transparent; color: var(--text-muted); width: 32px; padding: 0; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; }
+        .btn-icon:hover { background: var(--bg-active); color: var(--text-main); }
 
         .select-input {
-            height: 32px;
-            background: var(--bg-app);
-            border: 1px solid var(--border);
-            color: var(--text-main);
-            border-radius: 6px;
-            padding: 0 8px;
-            font-size: 13px;
-            cursor: pointer;
+            height: 32px; background: var(--bg-app); border: 1px solid var(--border);
+            color: var(--text-main); border-radius: 6px; padding: 0 8px; font-size: 13px; cursor: pointer;
         }
 
         .badge {
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 11px;
-            font-family: var(--font-code);
-            background: var(--bg-active);
-            border: 1px solid var(--border);
+            padding: 4px 8px; border-radius: 4px; font-size: 11px; font-family: var(--font-code);
+            background: var(--bg-active); border: 1px solid var(--border);
         }
+        .badge.danger { background: rgba(239, 68, 68, 0.1); color: var(--danger); border-color: var(--danger); }
 
-        .badge.danger {
-            background: rgba(239, 68, 68, 0.1);
-            color: var(--danger);
-            border-color: var(--danger);
+        /* --- USER ITEM --- */
+        .user-item {
+            padding: 8px 16px; display: flex; align-items: center; gap: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.03);
         }
+        .user-item:hover { background: rgba(255,255,255,0.02); }
 
         /* --- TERMINAL --- */
-        .panel-tabs {
-            display: flex;
-            border-bottom: 1px solid var(--border);
-            background: var(--bg-sidebar);
-        }
-
+        .panel-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-sidebar); }
         .panel-tab {
-            flex: 1;
-            padding: 10px;
-            text-align: center;
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--text-muted);
-            cursor: pointer;
-            border-bottom: 2px solid transparent;
+            flex: 1; padding: 10px; text-align: center; font-size: 12px; font-weight: 600;
+            color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent;
         }
+        .panel-tab.active { color: var(--text-main); border-bottom-color: var(--primary); background: var(--bg-panel); }
 
-        .panel-tab.active {
-            color: var(--text-main);
-            border-bottom-color: var(--primary);
-            background: var(--bg-panel);
-        }
-
-        .panel-content {
-            flex: 1;
-            display: none;
-            flex-direction: column;
-            overflow: hidden;
-        }
-
-        .panel-content.active {
-            display: flex;
-        }
+        .panel-content { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+        .panel-content.active { display: flex; }
 
         .terminal-display {
-            flex: 1;
-            padding: 16px;
-            font-family: var(--font-code);
-            font-size: 13px;
-            overflow-y: auto;
-            white-space: pre-wrap;
+            flex: 1; padding: 16px; font-family: var(--font-code); font-size: 13px;
+            overflow-y: auto; white-space: pre-wrap;
         }
 
         .terminal-input {
-            height: 80px;
-            background: var(--bg-sidebar);
-            border-top: 1px solid var(--border);
-            color: var(--text-main);
-            padding: 12px;
-            border: none;
-            resize: none;
-            font-family: var(--font-code);
+            height: 80px; background: var(--bg-sidebar); border-top: 1px solid var(--border);
+            color: var(--text-main); padding: 12px; border: none; resize: none; font-family: var(--font-code);
         }
 
         /* --- UTILS --- */
         .loader {
-            width: 30px;
-            height: 30px;
-            border: 3px solid var(--border);
-            border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s infinite;
+            width: 30px; height: 30px; border: 3px solid var(--border);
+            border-top-color: var(--primary); border-radius: 50%; animation: spin 1s infinite;
         }
+        @keyframes spin { to { transform: rotate(360deg); } }
 
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        .toast-container {
-            position: fixed;
-            bottom: 40px;
-            right: 24px;
-            z-index: 300;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            pointer-events: none;
-        }
-
+        .toast-container { position: fixed; bottom: 40px; right: 24px; z-index: 300; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
         .toast {
-            pointer-events: auto;
-            background: var(--bg-panel);
-            border: 1px solid var(--border);
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-weight: 500;
-            font-size: 13px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            pointer-events: auto; background: var(--bg-panel); border: 1px solid var(--border);
+            padding: 12px 16px; border-radius: 8px; font-weight: 500; font-size: 13px;
+            display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
             animation: slideIn 0.3s ease;
         }
-
-        @keyframes slideIn {
-            from {
-                transform: translateY(20px);
-                opacity: 0;
-            }
-
-            to {
-                transform: translateY(0);
-                opacity: 1;
-            }
-        }
+        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
         /* --- FOOTER --- */
         .app-footer {
-            height: 28px;
-            background: var(--bg-sidebar);
-            border-top: 1px solid var(--border);
-            display: flex;
-            align-items: center;
-            padding: 0 16px;
-            font-family: var(--font-code);
-            font-size: 11px;
-            color: var(--text-muted);
-            gap: 16px;
+            height: 28px; background: var(--bg-sidebar); border-top: 1px solid var(--border);
+            display: flex; align-items: center; padding: 0 16px; font-family: var(--font-code);
+            font-size: 11px; color: var(--text-muted); gap: 16px;
         }
 
+        /* --- MODAL --- */
+        #password-overlay { backdrop-filter: blur(5px); }
+
         @media(max-width: 900px) {
-            .workspace {
-                flex-direction: column;
-            }
-
-            .sidebar {
-                display: none;
-                position: absolute;
-                height: 100%;
-                box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5);
-            }
-
-            .sidebar.open {
-                display: flex;
-            }
-
-            .output-region {
-                width: 100%;
-                height: 35vh;
-                border-left: none;
-                border-top: 1px solid var(--border);
-            }
+            .workspace { flex-direction: column; }
+            .sidebar { display: none; position: absolute; height: 100%; box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5); }
+            .sidebar.open { display: flex; }
+            .output-region { width: 100%; height: 35vh; border-left: none; border-top: 1px solid var(--border); }
         }
     </style>
 </head>
 
 <body>
 
-    <div id="loading-overlay"
-        style="position:fixed; inset:0; background:rgba(9,9,11,0.95); z-index:500; display:flex; align-items:center; justify-content:center; flex-direction:column;">
+    <% if (requiresPassword) { %>
+    <div id="password-overlay" style="position:fixed; inset:0; background:rgba(9,9,11,0.8); z-index:9999; display:flex; align-items:center; justify-content:center;">
+        <div style="background:#141417; border:1px solid var(--border); padding:32px; border-radius:12px; width:320px; text-align:center; box-shadow:0 20px 40px -10px rgba(0,0,0,0.5);">
+            <div style="margin-bottom:16px; color:var(--primary);"><i data-lucide="lock" width="32"></i></div>
+            <h3 style="margin:0 0 8px 0; color:var(--text-main);">Private Session</h3>
+            <p style="margin:0 0 20px 0; color:var(--text-muted); font-size:13px;">Enter password to join this room.</p>
+            <input type="password" id="join-password" placeholder="Password" style="width:100%; height:40px; background:var(--bg-app); border:1px solid var(--border); color:#fff; padding:0 12px; border-radius:6px; margin-bottom:16px;">
+            <button onclick="Socket.attemptJoin()" class="btn btn-primary" style="width:100%; height:40px;">Unlock Room</button>
+            <div id="password-error" style="color:var(--danger); font-size:12px; margin-top:12px; display:none;"></div>
+        </div>
+    </div>
+    <% } %>
+
+    <div id="loading-overlay" style="position:fixed; inset:0; background:rgba(9,9,11,0.95); z-index:500; display:flex; align-items:center; justify-content:center; flex-direction:column;">
         <div class="loader"></div>
         <div style="margin-top:16px; font-weight:600; color:var(--text-muted);">Connecting to Environment...</div>
     </div>
@@ -339,19 +193,24 @@
             <button class="btn btn-primary" id="run-btn" onclick="Runner.execute()">
                 <i data-lucide="play" width="14"></i> Run
             </button>
-            <button class="btn-icon" onclick="UI.shareRoom()"><i data-lucide="share-2" width="18"></i></button>
+            <button class="btn-icon" onclick="UI.shareRoom()" title="Share"><i data-lucide="share-2" width="18"></i></button>
+            
+            <% if (isOwner) { %>
+            <button class="btn-icon" onclick="Socket.destroyRoom()" title="Destroy Room" style="color:var(--danger);">
+                <i data-lucide="trash-2" width="18"></i>
+            </button>
+            <% } %>
         </div>
     </header>
 
     <div class="workspace">
         <aside class="sidebar" id="sidebar">
-            <div
-                style="padding:16px; border-bottom:1px solid var(--border); font-weight:600; font-size:12px; color:var(--text-muted);">
-                ACTIVE USERS (<span id="user-count">0</span>)</div>
+            <div style="padding:16px; border-bottom:1px solid var(--border); font-weight:600; font-size:12px; color:var(--text-muted);">
+                ACTIVE USERS (<span id="user-count">0</span>)
+            </div>
             <div id="user-list" style="flex:1; overflow-y:auto; padding:8px;"></div>
             <div style="padding:16px; border-top:1px solid var(--border);">
-                <button class="btn" style="width:100%; background:var(--bg-active); color:var(--text-main);"
-                    onclick="Editor.download()">
+                <button class="btn" style="width:100%; background:var(--bg-active); color:var(--text-main);" onclick="Editor.download()">
                     <i data-lucide="download" width="14"></i> Download
                 </button>
             </div>
@@ -367,10 +226,8 @@
                 <div class="panel-tab" onclick="UI.switchTab('web')">Preview</div>
             </div>
             <div id="tab-io" class="panel-content active">
-                <div
-                    style="padding:8px; display:flex; justify-content:flex-end; border-bottom:1px solid var(--border);">
-                    <button class="btn-icon" onclick="UI.clearConsole()"><i data-lucide="trash-2"
-                            width="14"></i></button>
+                <div style="padding:8px; display:flex; justify-content:flex-end; border-bottom:1px solid var(--border);">
+                    <button class="btn-icon" onclick="UI.clearConsole()"><i data-lucide="trash-2" width="14"></i></button>
                 </div>
                 <div id="console-output" class="terminal-display">
                     <span style="opacity:0.5">// Output...</span>
@@ -399,11 +256,12 @@
         const Store = {
             roomId: "<%= roomid %>",
             isSynced: false,
-            isTransactionRemote: false, // Mutex Lock
+            isTransactionRemote: false,
             docVersion: 0,
             accessLevel: 'edit',
             language: 'javascript',
-            users: new Map(), // userId -> { color }
+            isOwner: false, // Track ownership
+            users: new Map(), 
             boilerplates: {
                 javascript: `console.log("Hello World");`,
                 python: `print("Hello World")`,
@@ -415,7 +273,6 @@
 
         /* ================= UTILS ================= */
         const Utils = {
-            // Generate consistent HSL colors based on User ID
             getHue(str) {
                 let hash = 0;
                 for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
@@ -444,12 +301,16 @@
                 Store.accessLevel = level;
                 const isView = level === 'view';
                 const badge = document.getElementById('access-badge');
-                badge.innerText = isView ? 'READ ONLY' : 'EDITOR';
+                
+                badge.innerText = isView ? 'READ ONLY' : 'EDITOR ACCESS';
                 badge.className = isView ? 'badge danger' : 'badge';
+                
                 document.getElementById('run-btn').disabled = isView;
                 document.getElementById('language-select').disabled = isView;
+                
                 if (Editor.monaco) Editor.monaco.updateOptions({ readOnly: isView });
-                if (isView) this.toast("Read-Only Mode Active", "warning");
+                
+                if (isView) this.toast("Spectator Mode Active", "warning");
             },
 
             updateTimer(expiryIso) {
@@ -460,9 +321,9 @@
                     if (diff <= 0) {
                         document.getElementById('timer-display').innerText = "EXPIRED";
                         this.setAccess('view');
-                        return;
+                    } else {
+                        document.getElementById('timer-display').innerText = Utils.formatTime(diff);
                     }
-                    document.getElementById('timer-display').innerText = Utils.formatTime(diff);
                 }, 1000);
             },
 
@@ -470,27 +331,39 @@
                 const list = document.getElementById('user-list');
                 list.innerHTML = '';
                 document.getElementById('user-count').innerText = Store.users.size;
-                Store.users.forEach((data, id) => {
+                
+                const myId = Socket.io ? Socket.io.id : '';
+
+                Store.users.forEach((user, id) => {
                     const hue = Utils.getHue(id);
                     const color = `hsl(${hue}, 75%, 60%)`;
+                    const displayName = user.username || `User ${id.slice(0,4)}`;
+                    
+                    // KICK BUTTON LOGIC: Show only if I am owner AND user is not me
+                    const isMe = id === myId;
+                    const kickBtn = (Store.isOwner && !isMe) 
+                        ? `<button class="btn-icon" onclick="Socket.kickUser('${id}')" style="margin-left:auto; color:var(--danger); width:24px; height:24px; border-radius:4px;" title="Kick"><i data-lucide="ban" width="14"></i></button>` 
+                        : '';
 
                     const el = document.createElement('div');
-                    el.style.padding = '8px'; el.style.borderBottom = '1px solid rgba(255,255,255,0.05)'; el.style.display = 'flex'; el.style.gap = '10px'; el.style.alignItems = 'center';
+                    el.className = 'user-item';
                     el.innerHTML = `
-                        <div style="width:24px;height:24px;border-radius:4px;background:${color}20;color:${color};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:10px;">
-                            ${id.slice(0, 2).toUpperCase()}
+                        <div class="avatar" style="background:${color}20; color:${color}; border:1px solid ${color}40; width:24px; height:24px; border-radius:4px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:10px;">
+                            ${displayName.substring(0,2).toUpperCase()}
                         </div> 
-                        <span style="font-size:13px;color:var(--text-main);">User ${id.slice(0, 4)}</span>
+                        <span style="font-size:13px;color:var(--text-main);">${displayName}</span>
+                        ${kickBtn}
                     `;
                     list.appendChild(el);
                 });
+                lucide.createIcons(); // Refresh icons for new buttons
             },
 
             toast(msg, type = 'info') {
                 const area = document.getElementById('toast-area');
                 const el = document.createElement('div');
                 el.className = 'toast';
-                el.style.borderLeft = `4px solid ${type === 'warning' ? 'var(--warning)' : 'var(--primary)'}`;
+                el.style.borderLeft = `4px solid ${type === 'warning' ? 'var(--warning)' : type === 'danger' ? 'var(--danger)' : 'var(--primary)'}`;
                 el.innerHTML = `<span>${msg}</span>`;
                 area.appendChild(el);
                 setTimeout(() => el.remove(), 3000);
@@ -521,12 +394,14 @@
                     monaco.editor.defineTheme('midnight', { base: 'vs-dark', inherit: true, rules: [], colors: { 'editor.background': '#09090b' } });
 
                     this.monaco = monaco.editor.create(document.getElementById("monaco-container"), {
-                        value: "", language: "javascript", theme: "midnight",
+                        value: "// Connecting...",
+                        language: "javascript", 
+                        theme: "midnight",
                         automaticLayout: true, fontSize: 14, fontFamily: "'JetBrains Mono', monospace",
-                        minimap: { enabled: true, scale: 0.75 }, padding: { top: 20 }, readOnly: true
+                        minimap: { enabled: true, scale: 0.75 }, padding: { top: 20 }, 
+                        readOnly: true
                     });
 
-                    // --- EVENTS ---
                     this.monaco.onDidChangeModelContent(e => {
                         if (Store.isTransactionRemote || !Store.isSynced) return;
                         Socket.emitOp(e.changes, Store.docVersion);
@@ -537,55 +412,49 @@
                         document.getElementById('cursor-coords').innerText = `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
                     });
 
-                    // Broadcast Selection
                     this.monaco.onDidChangeCursorSelection(e => {
-                        if (e.selection.isEmpty()) {
-                            Socket.emitSelectionClear();
-                        } else {
-                            Socket.emitSelection(e.selection);
-                        }
+                        if (e.selection.isEmpty()) Socket.emitSelectionClear();
+                        else Socket.emitSelection(e.selection);
                     });
-
-
 
                     Socket.connect();
                 });
             },
 
-            // --- REMOTE UPDATES (MUTEX PROTECTED) ---
             setContent(content, version, lang) {
-                Store.isTransactionRemote = true; // LOCK
+                Store.isTransactionRemote = true;
                 const current = this.monaco.getValue();
-                if (content !== null && content !== current) {
-                    this.monaco.setValue(content || Store.boilerplates[lang]);
+                
+                if (content !== null && (content !== current || !Store.isSynced)) {
+                    this.monaco.setValue(content || Store.boilerplates[lang] || "");
                 }
+                
                 if (lang && lang !== Store.language) {
                     monaco.editor.setModelLanguage(this.monaco.getModel(), lang);
                     Store.language = lang;
                     document.getElementById('language-select').value = lang;
-                    if (lang === 'html') UI.switchTab('web'); else UI.switchTab('io');
                 }
+                
                 Store.docVersion = version;
                 Store.isSynced = true;
-                if (Store.accessLevel === 'edit') this.monaco.updateOptions({ readOnly: false });
-                Store.isTransactionRemote = false; // UNLOCK
+                Store.isTransactionRemote = false;
+                
+                this.monaco.updateOptions({ readOnly: Store.accessLevel === 'view' });
             },
 
             applyEdits(changes, version) {
-                Store.isTransactionRemote = true; // LOCK
+                Store.isTransactionRemote = true;
                 const edits = changes.map(c => ({ range: c.range, text: c.text, forceMoveMarkers: true }));
                 this.monaco.getModel().applyEdits(edits);
                 Store.docVersion = version;
-                Store.isTransactionRemote = false; // UNLOCK
+                Store.isTransactionRemote = false;
             },
 
-            // --- VISUALS ---
             ensureUserStyle(userId) {
                 const styleId = `style-${userId}`;
                 if (document.getElementById(styleId)) return;
 
                 const hue = Utils.getHue(userId);
-                // We use HSLA for background to ensure text remains readable (no opacity inheritance)
                 const colorSolid = `hsl(${hue}, 75%, 60%)`;
                 const colorTransparent = `hsla(${hue}, 75%, 60%, 0.25)`;
 
@@ -598,7 +467,6 @@
                         background: ${colorSolid}; color: #000; font-size: 10px; padding: 1px 4px; border-radius: 4px; 
                         font-weight: bold; pointer-events: none; white-space: nowrap; z-index: 10;
                     }
-                    /* Using inlineClassName ensures background doesn't override text color */
                     .sel-${userId} { background-color: ${colorTransparent} !important; }
                 `;
                 document.head.appendChild(style);
@@ -615,15 +483,13 @@
 
             updateRemoteSelection(userId, selection) {
                 this.ensureUserStyle(userId);
-                // Validate selection (avoid drawing if start === end)
                 if (selection.startLineNumber === selection.endLineNumber && selection.startColumn === selection.endColumn) {
                     this.clearRemoteSelection(userId);
                     return;
                 }
-
                 const decorations = [{
                     range: new monaco.Range(selection.startLineNumber, selection.startColumn, selection.endLineNumber, selection.endColumn),
-                    options: { inlineClassName: `sel-${userId}` } // Changed from className to inlineClassName
+                    options: { inlineClassName: `sel-${userId}` }
                 }];
                 this.remoteSelections[userId] = this.monaco.deltaDecorations(this.remoteSelections[userId] || [], decorations);
             },
@@ -654,21 +520,81 @@
         /* ================= SOCKET ================= */
         const Socket = {
             io: null,
+            requiresPassword: <%= requiresPassword %>, 
+
             connect() {
+                if (this.requiresPassword) return;
+                this.initConnection(null);
+            },
+            
+            attemptJoin() {
+                const pass = document.getElementById('join-password').value;
+                this.initConnection(pass);
+            },
+            
+            destroyRoom() {
+                if(confirm("Are you sure? This will delete the room permanently.")) {
+                    this.io.emit('destroy_room');
+                }
+            },
+
+            kickUser(id) {
+                
+                    this.io.emit('kick_user', { targetSocketId: id });
+                
+            },
+
+            initConnection(password) {
                 this.io = io();
                 this.io.on('connect', () => {
                     UI.setOnline(true);
                     document.getElementById('socket-id').innerText = `ID: ${this.io.id.slice(0, 6)}`;
-                    this.io.emit('join_room', Store.roomId);
+                    this.io.emit('join_room', { roomId: Store.roomId, password });
                 });
+                
                 this.io.on('disconnect', () => UI.setOnline(false));
 
                 // --- DATA SYNC ---
                 this.io.on('syncSnapshot', (data) => {
+                    if (this.requiresPassword) {
+                        const overlay = document.getElementById('password-overlay');
+                        if(overlay) overlay.remove();
+                    }
+                    
+                    // Save Ownership State
+                    Store.isOwner = data.isOwner;
+
                     if (data.expiry) UI.updateTimer(data.expiry);
-                    if (data.accessLevel) UI.setAccess(data.accessLevel);
+                    if (data.accessLevel) Store.accessLevel = data.accessLevel;
+                    UI.setAccess(Store.accessLevel);
+                    
+                    Store.users = new Map();
+                    if(data.users) data.users.forEach(u => Store.users.set(u.id, u));
+                    UI.updateUsers(); // This now renders kick buttons if owner
+
                     Editor.setContent(data.content, data.version, data.language);
+                    
                     UI.toast("Joined Successfully");
+                });
+                
+                this.io.on('roomDestroyed', () => {
+                    alert("This room has been destroyed.");
+                    window.location.href = '/';
+                });
+
+                this.io.on('kicked', () => {
+                    alert("You have been kicked from this room.");
+                    window.location.href = '/';
+                });
+
+                this.io.on('error', (msg) => {
+                    if (this.requiresPassword && document.getElementById('password-overlay')) {
+                        const err = document.getElementById('password-error');
+                        err.innerText = msg; err.style.display = 'block';
+                        this.io.disconnect();
+                    } else {
+                        UI.toast(msg, 'warning');
+                    }
                 });
 
                 this.io.on('editorOp', (data) => Editor.applyEdits(data.changes, data.version));
@@ -677,48 +603,30 @@
 
                 // --- PRESENCE ---
                 this.io.on('cursorUpdate', ({ userId, position }) => {
-                    if (!Store.users.has(userId)) {
-                        Store.users.set(userId, {}); // Color handled by CSS injector
-                        UI.updateUsers();
-                    }
+                    if (!Store.users.has(userId)) Store.users.set(userId, { username: 'Guest' });
                     Editor.updateRemoteCursor(userId, position);
                 });
 
-                this.io.on('selectionUpdate', ({ userId, selection }) => {
-                    // Force register user if missing to ensure highlight shows
-                    if (!Store.users.has(userId)) {
-                        Store.users.set(userId, {});
-                        UI.updateUsers();
-                    }
-                    Editor.updateRemoteSelection(userId, selection);
+                this.io.on('selectionUpdate', ({ userId, selection }) => Editor.updateRemoteSelection(userId, selection));
+                this.io.on('selectionClear', (userId) => Editor.clearRemoteSelection(userId));
+
+                this.io.on('userJoined', ({ user }) => {
+                    Store.users.set(user.id, user); 
+                    UI.updateUsers();
+                    UI.toast(`${user.username} Joined`);
                 });
 
-                this.io.on('selectionClear', (userId) => {
-                    Editor.clearRemoteSelection(userId);
-                });
-
-                this.io.on('userDisconnected', (userId) => {
-                    Editor.removeUser(userId);
+                this.io.on('userLeft', ({ userId }) => {
                     Store.users.delete(userId);
                     UI.updateUsers();
+                    Editor.removeUser(userId);
                     UI.toast("User Left");
                 });
             },
 
             emitOp(changes, v) { this.io.emit('editorOp', { roomId: Store.roomId, changes, baseVersion: v }); },
-            emitCursor(pos) { this.io.volatile.emit('cursorMove', { roomId: Store.roomId, position: pos }); },
-            emitSelection(sel) {
-                this.io.emit('selectionChange', {
-                    roomId: Store.roomId,
-                    selection: {
-                        startLineNumber: sel.startLineNumber,
-                        startColumn: sel.startColumn,
-                        endLineNumber: sel.endLineNumber,
-                        endColumn: sel.endColumn
-                    }
-                });
-            },
-
+            emitCursor(pos) { if(this.io) this.io.volatile.emit('cursorMove', { roomId: Store.roomId, position: pos }); },
+            emitSelection(sel) { this.io.emit('selectionChange', { roomId: Store.roomId, selection: sel }); },
             emitSelectionClear() { this.io.emit('selectionClear', { roomId: Store.roomId }); },
             emitLang(lang) { this.io.emit('languageChange', { roomId: Store.roomId, language: lang }); }
         };
@@ -742,7 +650,7 @@
                 out.innerText = "Running..."; UI.switchTab('io');
 
                 try {
-                    const res = await fetch(CONFIG.pistonUrl, {
+                    const res = await fetch("https://emkc.org/api/v2/piston/execute", {
                         method: "POST", headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ language: lang === 'python' ? 'python' : lang === 'cpp' ? 'c++' : lang, version: "*", files: [{ content: code }], stdin: document.getElementById('stdin-input').value })
                     });
@@ -758,13 +666,10 @@
 
         document.getElementById('language-select').addEventListener('change', (e) => {
             if (Store.accessLevel === 'view') { e.target.value = Store.language; return; }
-            const lang = e.target.value;
-            if (Editor.monaco.getValue().length < 15) Editor.monaco.setValue(Store.boilerplates[lang]);
-            Socket.emitLang(lang);
+            Socket.emitLang(e.target.value);
         });
 
         Editor.init();
     </script>
 </body>
-
 </html>
