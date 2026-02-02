@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>CollabCode Enterprise</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <style>
+        /* * ==========================================
+         * 1. DESIGN TOKENS & VARIABLES
+         * ==========================================
+         */
+        :root {
+            /* Palette: Midnight Pro */
+            --bg-body: #050505;
+            --bg-card: rgba(20, 20, 23, 0.7);
+            --bg-input: #0a0a0c;
+            --bg-input-hover: #121214;
+            
+            /* Borders */
+            --border-subtle: rgba(255, 255, 255, 0.08);
+            --border-hover: rgba(255, 255, 255, 0.15);
+            --border-active: rgba(255, 255, 255, 0.3);
+
+            /* Brand Colors */
+            --primary: #22c55e;
+            --primary-hover: #16a34a;
+            --primary-glow: rgba(34, 197, 94, 0.25);
+            
+            /* Text Colors */
+            --text-main: #ededef;
+            --text-muted: #a1a1aa;
+            --text-disabled: #52525b;
+
+            /* Spacing */
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+
+            /* Animation */
+            --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* * ==========================================
+         * 2. BASE STYLES
+         * ==========================================
+         */
+        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; -webkit-font-smoothing: antialiased; }
+
+        body {
+            background-color: var(--bg-body);
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(34, 197, 94, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 80% 80%, rgba(255, 255, 255, 0.02) 0%, transparent 30%);
+            color: var(--text-main);
+            font-family: 'Inter', system-ui, sans-serif;
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            overflow: hidden;
+        }
+
+        /* Background Glow */
+        body::before {
+            content: ''; position: absolute; top: -100px; left: 50%; transform: translateX(-50%);
+            width: 600px; height: 400px;
+            background: radial-gradient(ellipse at center, var(--primary-glow) 0%, transparent 70%);
+            opacity: 0.4; pointer-events: none; z-index: -1;
+        }
+
+        /* * ==========================================
+         * 3. LAYOUT & CARDS
+         * ==========================================
+         */
+        .view-container {
+            width: 100%; max-width: 500px; padding: var(--space-lg);
+            perspective: 1000px;
+            display: none; /* Hidden by default, JS toggles this */
+            opacity: 0;
+            transition: opacity 0.4s var(--ease-out), transform 0.4s var(--ease-out);
+        }
+
+        .view-container.active {
+            display: block;
+            opacity: 1;
+            animation: cardEntrance 0.6s var(--ease-out) forwards;
+        }
+
+        @keyframes cardEntrance {
+            from { opacity: 0; transform: translateY(20px) scale(0.98); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .card {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border-subtle); border-radius: var(--radius-lg);
+            padding: 40px;
+            box-shadow: 0 0 0 1px rgba(0,0,0,0.2), 0 20px 40px -10px rgba(0,0,0,0.5);
+        }
+
+        /* * ==========================================
+         * 4. TYPOGRAPHY
+         * ==========================================
+         */
+        .header { margin-bottom: var(--space-xl); text-align: left; }
+        .header h1 {
+            font-size: 24px; font-weight: 700; color: #fff; letter-spacing: -0.03em;
+            display: flex; align-items: center; gap: 12px; margin-bottom: 8px;
+        }
+        .header h1 svg { color: var(--primary); filter: drop-shadow(0 0 8px var(--primary-glow)); }
+        .header p { color: var(--text-muted); font-size: 14px; line-height: 1.5; }
+
+        /* * ==========================================
+         * 5. FORMS & INPUTS
+         * ==========================================
+         */
+        .form-group { margin-bottom: 24px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); margin-bottom: 24px; }
+
+        label {
+            display: block; font-size: 12px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 10px;
+            transition: color 0.2s;
+        }
+        .form-group:focus-within label { color: var(--text-main); }
+
+        input[type="text"], input[type="password"], input[type="email"], select {
+            width: 100%; height: 48px;
+            background-color: var(--bg-input);
+            border: 1px solid var(--border-subtle);
+            color: var(--text-main); padding: 0 16px;
+            border-radius: var(--radius-sm);
+            font-size: 14px; font-family: 'Inter', sans-serif;
+            transition: all 0.2s var(--ease-out);
+            appearance: none;
+        }
+        input:focus, select:focus {
+            background-color: var(--bg-input); border-color: var(--primary);
+            box-shadow: 0 0 0 4px var(--primary-glow);
+        }
+        .select-wrapper { position: relative; }
+        .select-wrapper::after {
+            content: ''; position: absolute; right: 16px; top: 50%; transform: translateY(-50%);
+            width: 10px; height: 6px; pointer-events: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+            background-size: contain; background-repeat: no-repeat;
+        }
+
+        /* * ==========================================
+         * 6. RADIO CARDS & TOGGLES
+         * ==========================================
+         */
+        .radio-group { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-md); }
+        .radio-card {
+            background: var(--bg-input); border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md); padding: 16px; cursor: pointer;
+            transition: all 0.2s var(--ease-out); position: relative; overflow: hidden;
+        }
+        .radio-card:hover { border-color: var(--border-active); transform: translateY(-2px); }
+        .radio-card.selected {
+            background: rgba(34, 197, 94, 0.08); border-color: var(--primary);
+            box-shadow: 0 4px 12px var(--primary-glow);
+        }
+        .radio-title { font-size: 14px; font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+        .radio-title svg { width: 16px; height: 16px; color: var(--text-muted); transition: color 0.2s; }
+        .radio-card.selected .radio-title svg { color: var(--primary); }
+        .radio-desc { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+        .toggle-container {
+            background: var(--bg-input); border: 1px solid var(--border-subtle);
+            border-radius: var(--radius-md); padding: 12px 16px;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .switch-wrapper { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch-wrapper input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--border-active); border-radius: 34px; transition: .3s;
+        }
+        .slider:before {
+            position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px;
+            background-color: white; border-radius: 50%; transition: .3s;
+        }
+        input:checked + .slider { background-color: var(--primary); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        #password-section {
+            overflow: hidden; max-height: 0; opacity: 0;
+            transform: translateY(-10px); transition: all 0.3s var(--ease-out);
+        }
+        #password-section.visible { max-height: 80px; opacity: 1; transform: translateY(0); margin-top: 16px; }
+
+        /* * ==========================================
+         * 7. BUTTONS
+         * ==========================================
+         */
+        .btn-submit {
+            width: 100%; height: 52px; background: var(--primary); color: #000;
+            border: none; border-radius: var(--radius-sm); font-size: 15px; font-weight: 700;
+            cursor: pointer; position: relative; overflow: hidden; transition: all 0.2s;
+            box-shadow: 0 4px 20px var(--primary-glow); margin-top: 24px;
+        }
+        .btn-submit:hover { background: var(--primary-hover); transform: translateY(-1px); }
+        
+        .btn-text {
+            background: transparent; border: none; color: var(--text-muted);
+            font-size: 12px; cursor: pointer; margin-top: 16px; width: 100%;
+            transition: color 0.2s;
+        }
+        .btn-text:hover { color: var(--text-main); text-decoration: underline; }
+
+        .loader {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 20px; height: 20px; border: 2px solid rgba(0,0,0,0.1); border-top-color: #000;
+            border-radius: 50%; animation: spin 0.8s linear infinite; opacity: 0;
+        }
+        .btn-submit.loading { color: transparent; pointer-events: none; }
+        .btn-submit.loading .loader { opacity: 1; }
+        @keyframes spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+
+        /* User Profile Badge */
+        .user-badge {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 12px; background: rgba(34, 197, 94, 0.1); border: 1px solid rgba(34, 197, 94, 0.2);
+            border-radius: var(--radius-sm); margin-bottom: 24px; color: var(--primary); font-size: 13px; font-weight: 600;
+        }
+        .btn-logout { background: transparent; border: none; color: var(--text-muted); font-size: 11px; cursor: pointer; text-decoration: underline; }
+        
+    </style>
+</head>
+<body>
+
+    <div id="auth-view" class="view-container">
+        <div class="card">
+            <div class="header">
+                <h1>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                    Welcome
+                </h1>
+                <p id="auth-subtitle">Sign in to access your collaborative workspace.</p>
+            </div>
+
+            <div class="form-group">
+                <label>Email Address</label>
+                <input type="email" id="auth-email" placeholder="user@example.com" value="demo@user.com">
+            </div>
+
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="auth-pass" placeholder="••••••••" value="password">
+            </div>
+
+            <div class="form-group" id="name-group" style="display:none;">
+                <label>Full Name</label>
+                <input type="text" id="auth-name" placeholder="John Doe">
+            </div>
+
+            <button class="btn-submit" id="auth-btn" onclick="Auth.submit()">
+                <span>Sign In</span>
+                <div class="loader"></div>
+            </button>
+
+            <button class="btn-text" onclick="Auth.toggleMode()">
+                <span id="auth-toggle-text">New here? Create an account</span>
+            </button>
+        </div>
+    </div>
+
+    <div id="app-view" class="view-container">
+        <div class="card">
+            
+            <div class="user-badge">
+                <span id="user-display-name">Logged in as User</span>
+                <button class="btn-logout" onclick="Auth.logout()">Sign Out</button>
+            </div>
+
+            <div class="header">
+                <h1>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                    New Session
+                </h1>
+                <p>Configure your environment options below.</p>
+            </div>
+
+            <div id="create-form">
+                <div class="form-group">
+                    <label>Project Name</label>
+                    <input type="text" id="roomName" placeholder="e.g. Daily Standup Notes">
+                </div>
+
+                <div class="form-row">
+                    <div class="col">
+                        <label>Environment</label>
+                        <div class="select-wrapper">
+                            <select id="language">
+                                <option value="javascript">JavaScript</option>
+                                <option value="python">Python 3</option>
+                                <option value="java">Java 17</option>
+                                <option value="cpp">C++ 20</option>
+                                <option value="html">HTML5</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <label>Timeout</label>
+                        <div class="select-wrapper">
+                            <select id="expiry">
+                                <option value="never">Unlimited</option>
+                                <option value="1h">1 Hour</option>
+                                <option value="24h">24 Hours</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Access Control</label>
+                    <div class="radio-group">
+                        <div class="radio-card selected" onclick="App.toggleAccess('edit', this)">
+                            <div class="radio-title">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                                Editor
+                            </div>
+                            <div class="radio-desc">Collaborators have full access.</div>
+                        </div>
+                        <div class="radio-card" onclick="App.toggleAccess('view', this)">
+                            <div class="radio-title">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                                Spectator
+                            </div>
+                            <div class="radio-desc">Read-only mode for guests.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <div class="toggle-container">
+                        <div>
+                            <span style="font-size:14px; font-weight:500; color:var(--text-main);">Private Session</span>
+                            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">Require password to join</div>
+                        </div>
+                        <label class="switch-wrapper">
+                            <input type="checkbox" id="privateToggle" onchange="App.togglePassword()">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div id="password-section">
+                        <input type="password" id="roomPassword" placeholder="Set session password...">
+                    </div>
+                </div>
+
+                <button class="btn-submit" id="createBtn" onclick="App.createRoom()">
+                    <span>Launch Environment</span>
+                    <div class="loader"></div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api'; // Assuming backend on same domain
+
+        // --- AUTHENTICATION MODULE ---
+        const Auth = {
+            isSignup: false,
+            user: null,
+
+            init() {
+                const stored = localStorage.getItem('cc_user');
+                if (stored) {
+                    this.user = JSON.parse(stored);
+                    App.show(); // Show App View
+                } else {
+                    document.getElementById('auth-view').classList.add('active'); // Show Auth View
+                }
+            },
+
+            toggleMode() {
+                this.isSignup = !this.isSignup;
+                
+                // Animate/Swap Text
+                const btn = document.querySelector('#auth-btn span');
+                const toggle = document.getElementById('auth-toggle-text');
+                const nameGroup = document.getElementById('name-group');
+                const subtitle = document.getElementById('auth-subtitle');
+
+                if (this.isSignup) {
+                    btn.innerText = "Create Account";
+                    toggle.innerText = "Already have an account? Sign In";
+                    nameGroup.style.display = 'block';
+                    subtitle.innerText = "Create an account to start coding.";
+                } else {
+                    btn.innerText = "Sign In";
+                    toggle.innerText = "New here? Create an account";
+                    nameGroup.style.display = 'none';
+                    subtitle.innerText = "Sign in to access your collaborative workspace.";
+                }
+            },
+
+// Inside const Auth = { ... }
+
+async submit() {
+    const email = document.getElementById('auth-email').value;
+    const pass = document.getElementById('auth-pass').value;
+    const name = document.getElementById('auth-name').value;
+    const btn = document.getElementById('auth-btn');
+
+    if (!email || !pass) return alert("Please fill in all fields");
+
+    btn.classList.add('loading');
+
+    const endpoint = this.isSignup ? '/auth/signup' : '/auth/login';
+    
+    try {
+        // 1. Attempt the Network Request
+        const res = await fetch(API_BASE + endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password: pass, name })
+        });
+
+        // 2. Check if the response is valid JSON
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            throw new Error("Server error: Received non-JSON response. Is MongoDB running?");
+        }
+
+        const data = await res.json();
+
+        // 3. Handle Logical Errors (e.g., "Wrong Password")
+        if (!res.ok || data.error) {
+            throw new Error(data.error || `Request failed with status ${res.status}`);
+        }
+
+        // 4. Success
+        this.user = data.user;
+        localStorage.setItem('cc_user', JSON.stringify(data.user));
+        
+        // Transition View
+        document.getElementById('auth-view').classList.remove('active');
+        setTimeout(() => App.show(), 300);
+
+    } catch (e) {
+        // 5. Handle Network Errors (e.g., Server Offline)
+        console.error("Login Error:", e);
+        alert(e.message || "Connection failed. Please ensure the server (port 3000) and MongoDB are running.");
+    } finally {
+        btn.classList.remove('loading');
+    }
+},
+
+            logout() {
+                localStorage.removeItem('cc_user');
+                location.reload();
+            }
+        };
+
+        // --- MAIN APPLICATION MODULE ---
+        const App = {
+            accessLevel: 'edit',
+
+            show() {
+                document.getElementById('app-view').classList.add('active');
+                document.getElementById('user-display-name').innerText = `Logged in as ${Auth.user.name}`;
+            },
+
+            toggleAccess(level, el) {
+                this.accessLevel = level;
+                document.querySelectorAll('.radio-card').forEach(c => c.classList.remove('selected'));
+                el.classList.add('selected');
+            },
+
+            togglePassword() {
+                const checked = document.getElementById('privateToggle').checked;
+                const section = document.getElementById('password-section');
+                const input = document.getElementById('roomPassword');
+                
+                if(checked) {
+                    section.classList.add('visible');
+                    setTimeout(() => input.focus(), 100);
+                } else {
+                    section.classList.remove('visible');
+                    input.value = '';
+                }
+            },
+
+            async createRoom() {
+                const btn = document.getElementById('createBtn');
+                const payload = {
+                    name: document.getElementById('roomName').value || "Untitled Project",
+                    language: document.getElementById('language').value,
+                    expiry: document.getElementById('expiry').value,
+                    accessLevel: this.accessLevel,
+                    isPrivate: document.getElementById('privateToggle').checked,
+                    password: document.getElementById('roomPassword').value
+                };
+
+                btn.classList.add('loading');
+
+                try {
+                    const res = await fetch(API_BASE + '/create_room', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': Auth.user.id // Send ID for backend check
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const data = await res.json();
+                    
+                    if (data.id) {
+                        setTimeout(() => window.location.href = `/room/${data.id}`, 500);
+                    } else {
+                        throw new Error("Failed to create room");
+                    }
+                } catch (e) {
+                    alert(e.message);
+                    btn.classList.remove('loading');
+                }
+            }
+        };
+
+        // Start
+        Auth.init();
+    </script>
+</body>
+</html>
