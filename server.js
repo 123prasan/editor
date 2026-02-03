@@ -5,7 +5,8 @@ const cors = require("cors");
 const path = require("path");
 const mongoose = require("mongoose");
 const cookieParser = require("cookie-parser");
-
+const fs = require('fs');
+const { spawn } = require('child_process');
 /* ==========================================================================
    1. DATABASE MODELS
    ========================================================================== */
@@ -123,7 +124,8 @@ app.get("/room/:id", requirePageLogin, async (req, res) => {
             roomid: req.params.id,
             user: req.user,
             requiresPassword,
-            isOwner
+            isOwner,
+            roomLanguage: room.language
         });
     } catch (e) {
         res.status(500).send("Server Error");
@@ -262,7 +264,7 @@ app.post("/api/create_room", requireAuth, async (req, res) => {
             ownerId: req.user._id,
             isPrivate: !!isPrivate,
             password: password || null,
-            bannedUsers: [], 
+            bannedUsers: [],
             users: []
         };
 
@@ -292,11 +294,224 @@ io.use((socket, next) => {
     }
     next();
 });
+/* ==========================================================================
+   CONTAINER MANAGER (High Performance)
+   ========================================================================== */
+const ContainerManager = {
+    // Check if a container exists and is running
+    async ensureContainer(roomId) {
+        const containerName = `collab_room_${roomId}`;
 
+        // 1. Check if already running
+        try {
+            const check = spawn('docker', ['inspect', '-f', '{{.State.Running}}', containerName]);
+            const isRunning = await new Promise(resolve => {
+                check.stdout.on('data', d => resolve(d.toString().trim() === 'true'));
+                check.on('close', () => resolve(false));
+            });
+            if (isRunning) return true;
+        } catch (e) { }
+
+        // 2. Cleanup dead/zombie container if exists
+        try {
+            await new Promise(r => {
+                const kill = spawn('docker', ['rm', '-f', containerName]);
+                kill.on('close', r);
+            });
+        } catch (e) { }
+
+        // 3. Start new "Sleeping" container (Keep-Alive)
+        // We mount the specific room's temp directory
+        const roomDir = path.join(TEMP_DIR, `room_${roomId}`);
+        if (!fs.existsSync(roomDir)) fs.mkdirSync(roomDir);
+
+        return new Promise((resolve, reject) => {
+            const args = [
+                'run', '-d',                // Detached mode
+                '--rm',                     // Remove when stopped
+                '--name', containerName,    // Predictable name
+                '--network', 'none',        // Security
+                '--cpus', '0.5',            // Resource limit
+                '--memory', '128m',         // Memory limit
+                '-v', `${roomDir}:/app`,    // Mount host dir
+                'collab-runner',            // Image
+                'sleep', 'infinity'         // Command to keep it alive
+            ];
+
+            const start = spawn('docker', args);
+            start.on('close', code => {
+                if (code === 0) resolve(true);
+                else reject(new Error("Failed to start container"));
+            });
+        });
+    },
+
+    // Stop container when room is destroyed
+    stopContainer(roomId) {
+        const containerName = `collab_room_${roomId}`;
+        spawn('docker', ['kill', containerName]);
+        // Also clean up host directory
+        const roomDir = path.join(TEMP_DIR, `room_${roomId}`);
+        fs.rm(roomDir, { recursive: true, force: true }, () => { });
+    }
+};
 io.on("connection", (socket) => {
 
     socket.on('join_dashboard', () => socket.join('dashboard'));
 
+   let currentProcess = null;
+    const TEMP_DIR = path.join(__dirname, 'temp_workspaces');
+    if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR);
+
+    /* --- CONTAINER MANAGER (Optimized for Speed) --- */
+    const ContainerManager = {
+        async ensureContainer(roomId) {
+            const containerName = `collab_room_${roomId}`;
+            
+            // 1. Check if container is already running
+            try {
+                const check = spawn('docker', ['inspect', '-f', '{{.State.Running}}', containerName]);
+                const isRunning = await new Promise(resolve => {
+                    check.stdout.on('data', d => resolve(d.toString().trim() === 'true'));
+                    check.on('close', () => resolve(false));
+                });
+                if (isRunning) return true;
+            } catch (e) {}
+
+            // 2. Remove dead/stopped container if it exists
+            try {
+                await new Promise(r => {
+                    const kill = spawn('docker', ['rm', '-f', containerName]);
+                    kill.on('close', r);
+                });
+            } catch(e) {}
+
+            // 3. Create Host Directory for this room
+            const roomDir = path.join(TEMP_DIR, `room_${roomId}`);
+            if (!fs.existsSync(roomDir)) fs.mkdirSync(roomDir);
+
+            // 4. Start new "Sleeping" container (Keep-Alive)
+            return new Promise((resolve, reject) => {
+                const args = [
+                    'run', '-d',                // Detached mode
+                    '--rm',                     // Remove when stopped
+                    '--name', containerName,    // Predictable name for exec
+                    '--network', 'none',        // Security: No Internet
+                    '--cpus', '0.5',            // Security: CPU Limit
+                    '--memory', '128m',         // Security: RAM Limit
+                    '-v', `${roomDir}:/app`,    // Mount host dir to container
+                    'collab-runner',            // Image Name
+                    'sleep', 'infinity'         // Command to keep it alive
+                ];
+                
+                const start = spawn('docker', args);
+                start.on('close', code => {
+                    if (code === 0) resolve(true);
+                    else reject(new Error("Failed to start container environment"));
+                });
+            });
+        }
+    };
+
+    socket.on("run:start", async ({ language, code }) => {
+        const roomId = socket.roomId;
+        if (!roomId) return;
+
+        // Cleanup previous run for this socket
+        if (currentProcess) {
+            try { currentProcess.kill(); } catch (e) { }
+            currentProcess = null;
+        }
+
+        try {
+            socket.emit("term:data", `\r\n\x1b[2m> Initializing environment...\x1b[0m`);
+            
+            // 1. Ensure the Room's container is running (Instant if already active)
+            await ContainerManager.ensureContainer(roomId);
+
+            // 2. Write Code to Host Directory (Syncs to Container via Volume)
+            const roomDir = path.join(TEMP_DIR, `room_${roomId}`);
+            if (!fs.existsSync(roomDir)) fs.mkdirSync(roomDir);
+
+            let filename, execCmd;
+
+            if (language === 'python') {
+                filename = 'script.py';
+                await fs.promises.writeFile(path.join(roomDir, filename), code);
+                // "exec" runs inside the existing container
+                execCmd = ['python3', '-u', 'script.py'];
+
+            } else if (language === 'javascript') {
+                filename = 'script.js';
+                await fs.promises.writeFile(path.join(roomDir, filename), code);
+                execCmd = ['node', 'script.js'];
+
+            } else if (language === 'cpp') {
+                filename = 'main.cpp';
+                await fs.promises.writeFile(path.join(roomDir, filename), code);
+                // Compile & Run
+                execCmd = ['sh', '-c', 'g++ main.cpp -o main && ./main'];
+
+            } else if (language === 'java') {
+                filename = 'Main.java';
+                await fs.promises.writeFile(path.join(roomDir, filename), code);
+                // Compile & Run
+                execCmd = ['sh', '-c', 'javac Main.java && java Main'];
+            }
+
+            // 3. Execute using 'docker exec' (Fast!)
+            const containerName = `collab_room_${roomId}`;
+            const args = ['exec', '-i', containerName, ...execCmd]; // -i for interactive stdin
+
+            socket.emit("term:data", `\r\n\x1b[2m> Running ${language}...\x1b[0m\r\n`);
+
+            // 4. Spawn the execution process
+            currentProcess = spawn('docker', args);
+
+            // 5. Pipe Output & Error
+            currentProcess.stdout.on('data', (data) => {
+                socket.emit("term:data", data.toString().replace(/\n/g, '\r\n'));
+            });
+
+            currentProcess.stderr.on('data', (data) => {
+                socket.emit("term:data", `\x1b[31m${data.toString().replace(/\n/g, '\r\n')}\x1b[0m`);
+            });
+
+            currentProcess.on('close', (code) => {
+                socket.emit("term:data", `\r\n\x1b[2m> Exited (${code})\x1b[0m\r\n`);
+                currentProcess = null;
+            });
+
+        } catch (e) {
+            socket.emit("term:data", `\r\n\x1b[31mSystem Error: ${e.message}\r\n`);
+        }
+    });
+    // --- 2. HANDLE TERMINAL INPUT (STDIN) ---
+    socket.on("term:input", (input) => {
+        if (currentProcess && currentProcess.stdin) {
+            // FIX 1: Convert Web Terminal "Enter" (\r) to Shell "Enter" (\n)
+            // Without this, the process waits forever for a newline.
+            if (input === '\r') {
+                currentProcess.stdin.write('\n');
+            } else {
+                currentProcess.stdin.write(input);
+            }
+        }
+    });
+
+    // --- 3. HANDLE KILL SIGNAL ---
+    socket.on("run:stop", () => {
+        if (currentProcess) {
+            currentProcess.kill();
+            socket.emit("term:data", "\r\n\x1b[33m> Process stopped by user.\x1b[0m\r\n");
+            currentProcess = null;
+        }
+    });
+
+    // Cleanup on disconnect
+    socket.on("disconnect", () => {
+        if (currentProcess) currentProcess.kill();
+    });
     socket.on("join_room", async (data) => {
         const roomId = typeof data === 'object' ? data.roomId : data;
         const providedPassword = typeof data === 'object' ? data.password : null;
@@ -364,7 +579,7 @@ io.on("connection", (socket) => {
                 io.to(existingUser.id).emit("error", "New session started in another tab.");
                 const oldSocket = io.sockets.sockets.get(existingUser.id);
                 if (oldSocket) oldSocket.disconnect();
-                
+
                 // Remove from state immediately to prevent duplicates
                 state.users = state.users.filter(u => u.dbId !== dbId);
             }
@@ -436,9 +651,9 @@ io.on("connection", (socket) => {
         if (!roomId || !roomState[roomId]) return;
 
         // Verify Owner
-        const isOwner = roomState[roomId].ownerId && socket.userId && 
-                        (roomState[roomId].ownerId.toString() === socket.userId);
-        
+        const isOwner = roomState[roomId].ownerId && socket.userId &&
+            (roomState[roomId].ownerId.toString() === socket.userId);
+
         if (!isOwner) return;
 
         const targetSocket = io.sockets.sockets.get(targetSocketId);
@@ -449,10 +664,10 @@ io.on("connection", (socket) => {
             if (!roomState[roomId].bannedUsers) roomState[roomId].bannedUsers = [];
             if (!roomState[roomId].bannedUsers.includes(targetSocket.userId)) {
                 roomState[roomId].bannedUsers.push(targetSocket.userId);
-                
+
                 // Persist to DB
                 await Room.updateOne(
-                    { roomId }, 
+                    { roomId },
                     { $addToSet: { bannedUsers: targetSocket.userId } }
                 );
             }
@@ -567,7 +782,7 @@ async function saveRoomToDB(roomId) {
     const { content, version, language } = roomState[roomId];
     try {
         await Room.updateOne({ roomId }, { content, version, language, lastActive: new Date() }, { upsert: true });
-    } catch(e) { console.error("Auto-save failed", e); }
+    } catch (e) { console.error("Auto-save failed", e); }
 }
 
 function applyChanges(content, changes) {

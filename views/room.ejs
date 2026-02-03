@@ -9,12 +9,27 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-    
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
     <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
 
     <style>
+        /* --- XTERM TERMINAL --- */
+        .terminal-wrapper {
+            flex: 1; 
+            padding: 10px; 
+            background: #0c0c0e; /* Terminal Black */
+            overflow: hidden; 
+            position: relative;
+        }
+        /* Hide scrollbar for the wrapper, let xterm handle it */
+        .terminal-wrapper::-webkit-scrollbar { display: none; }
+        
+        /* Make sure the canvas fits */
+        .xterm-viewport { overflow-y: auto !important; }
         :root {
             /* --- THEME VARIABLES --- */
             --bg-app: #09090b;
@@ -375,15 +390,20 @@
                 </button>
             </div>
             
-            <div id="tab-io" class="panel-content active">
-                <div style="padding:8px; display:flex; justify-content:flex-end; border-bottom:1px solid #27272a;">
-                    <button class="btn-icon" onclick="UI.clearConsole()" style="width:28px; height:28px;"><i data-lucide="trash-2" width="14"></i></button>
+          <div id="tab-io" class="panel-content active">
+                <div style="padding:8px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); background:#18181b;">
+                    <span style="font-size:12px; font-weight:600; padding-left:8px; color:var(--text-muted);">TERMINAL</span>
+                    <div style="display:flex; gap:8px;">
+                        <button class="btn-icon" onclick="Runner.stop()" title="Stop Process" style="color:var(--danger);">
+                            <i data-lucide="square" width="14"></i>
+                        </button>
+                        <button class="btn-icon" onclick="TerminalUI.clear()" title="Clear">
+                            <i data-lucide="trash-2" width="14"></i>
+                        </button>
+                    </div>
                 </div>
-                <div id="console-output" class="terminal-display">// Output...</div>
-                <div class="console-input-wrapper">
-                    <span class="console-prompt">$</span>
-                    <input id="stdin-input" placeholder="Stdin input..." autocomplete="off">
-                </div>
+                
+                <div id="terminal" class="terminal-wrapper"></div>
             </div>
             
             <div id="tab-web" class="panel-content" style="background:white;">
@@ -428,7 +448,71 @@
 
     <script>
         lucide.createIcons();
+/* ================= TERMINAL MANAGER (xterm.js) ================= */
+        /* ================= TERMINAL MANAGER (xterm.js) ================= */
+        const TerminalUI = {
+            term: null,
+            fitAddon: null,
+            currentLine: "", // Buffer to track what user types
 
+            init() {
+                this.term = new Terminal({
+                    cursorBlink: true,
+                    convertEol: true, 
+                    fontFamily: "'JetBrains Mono', monospace",
+                    fontSize: 13,
+                    theme: {
+                        background: '#0c0c0e',
+                        foreground: '#f4f4f5',
+                        cursor: '#22c55e'
+                    }
+                });
+
+                this.fitAddon = new FitAddon.FitAddon();
+                this.term.loadAddon(this.fitAddon);
+                this.term.open(document.getElementById('terminal'));
+                this.fitAddon.fit();
+
+                this.term.write('\x1b[2m> Terminal Ready...\x1b[0m\r\n');
+
+                // --- HANDLE INPUT WITH LOCAL ECHO ---
+                this.term.onData(data => {
+                    // 1. Send data to server (Backend execution)
+                    Socket.io.emit('term:input', data);
+
+                    // 2. Local Echo (So you see what you type)
+                    if (data === '\r') {
+                        // User pressed Enter: New line + Reset buffer
+                        this.term.write('\r\n'); 
+                        this.currentLine = "";
+                    } else if (data === '\u007F') { 
+                        // User pressed Backspace
+                        if (this.currentLine.length > 0) {
+                            this.currentLine = this.currentLine.slice(0, -1);
+                            this.term.write('\b \b'); // Erase character visually
+                        }
+                    } else {
+                        // Normal character: Show it
+                        this.currentLine += data;
+                        this.term.write(data);
+                    }
+                });
+
+                window.addEventListener('resize', () => this.fitAddon.fit());
+                new ResizeObserver(() => this.fitAddon.fit()).observe(document.getElementById('terminal'));
+            },
+
+            write(data) {
+                if(this.term) this.term.write(data);
+            },
+
+            clear() {
+                if(this.term) {
+                    this.term.clear();
+                    this.currentLine = ""; // Reset buffer
+                }
+            }
+        };
         /* ================= STATE ================= */
         const Store = {
             roomId: "<%= roomid %>",
@@ -436,7 +520,7 @@
             isTransactionRemote: false,
             docVersion: 0,
             accessLevel: 'edit',
-            language: 'javascript',
+            language: "<%= roomLanguage %>",
             isOwner: false, // Track ownership
             users: new Map(), 
             boilerplates: {
@@ -751,7 +835,7 @@
                 require(["vs/editor/editor.main"], () => {
                     this.monaco = monaco.editor.create(document.getElementById("monaco-container"), {
                         value: "// Connecting...",
-                        language: "javascript", theme: "vs-dark",
+                        language: "<%= roomLanguage %>", theme: "vs-dark",
                         automaticLayout: true, fontSize: 14, fontFamily: "'JetBrains Mono', monospace",
                         minimap: { enabled: true, scale: 0.75 }, padding: { top: 20 }, readOnly: true
                     });
@@ -830,7 +914,19 @@
                 const blob = new Blob([this.monaco.getValue()], { type: "text/plain" });
                 const a = document.createElement("a");
                 a.href = window.URL.createObjectURL(blob);
-                a.download = `code.${Store.language === 'javascript' ? 'js' : 'txt'}`;
+                if(Store.language==='javascript'){
+                    a.download="code.js";
+                }else if(Store.language==='python'){
+                    a.download="code.py";
+                }else if(Store.language==='java'){
+                    a.download="code.java";
+                }else if(Store.language==='cpp'){
+                    a.download="code.cpp";
+                }else if(Store.language==='html'){
+                    a.download="code.html";
+                }else{
+                    a.download="code.txt";
+                }
                 a.click();
             }
         };
@@ -915,7 +1011,17 @@
                     } else UI.toast(msg, 'danger');
                 });
 
-                this.io.on('editorOp', (data) => Editor.applyEdits(data.changes, data.version));
+                // --- EDITOR EVENTS ---
+                this.io.on('editorOp', (data) => {
+                    // STALE EVENT CHECK: 
+                    // If the incoming change version is older or equal to what we already have, ignore it.
+                    // This prevents "double applying" changes on page load.
+                    if (data.version <= Store.docVersion) {
+                        console.log("Skipping stale op", data.version);
+                        return;
+                    }
+                    Editor.applyEdits(data.changes, data.version);
+                });
                 this.io.on('resync', (data) => Editor.setContent(data.content, data.version, data.language));
                 this.io.on('languageUpdate', (lang) => Editor.setContent(null, Store.docVersion, lang));
                 
@@ -927,6 +1033,13 @@
                 this.io.on('selectionUpdate', ({ userId, selection }) => Editor.updateRemoteSelection(userId, selection));
                 this.io.on('selectionClear', (userId) => Editor.clearRemoteSelection(userId));
                 this.io.on('disconnect', () => UI.setOnline(false));
+                // ... inside Socket.initConnection ...
+            
+            // --- TERMINAL EVENTS ---
+            this.io.on('term:data', (data) => {
+                UI.switchTab('io'); // Auto switch to console
+                TerminalUI.write(data);
+            });
             },
 
             emitOp(changes, v) { this.io.emit('editorOp', { roomId: Store.roomId, changes, baseVersion: v }); },
@@ -937,28 +1050,28 @@
         };
 
         const Runner = {
-            async execute() {
+            execute() {
                 if (Store.accessLevel === 'view') return;
                 const lang = Store.language;
                 const code = Editor.monaco.getValue();
-                const btn = document.getElementById('run-btn');
-                const out = document.getElementById('console-output');
 
-                btn.disabled = true; btn.innerHTML = 'Running...';
-                out.innerText = "Running..."; UI.switchTab('io');
+                // Clear terminal before run
+                TerminalUI.clear();
+                
+                // HTML Handling (Same as before)
+                if (lang === 'html') {
+                    const doc = document.getElementById('web-frame').contentDocument;
+                    doc.open(); doc.write(code); doc.close();
+                    UI.switchTab('web'); return;
+                }
 
-                try {
-                    const res = await fetch("https://emkc.org/api/v2/piston/execute", {
-                        method: "POST", headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ language: lang === 'python' ? 'python' : lang === 'cpp' ? 'c++' : lang, version: "*", files: [{ content: code }], stdin: document.getElementById('stdin-input').value })
-                    });
-                    const data = await res.json();
-                    if (data.run) {
-                        out.innerText = data.run.output || "No Output.";
-                        out.style.color = data.run.stderr ? "var(--danger)" : "#d4d4d8";
-                    } else out.innerText = "Error: " + (data.message || "Unknown error");
-                } catch (e) { out.innerText = "Error: " + e.message; }
-                finally { btn.disabled = false; btn.innerHTML = '<i data-lucide="play" width="16"></i> <span class="btn-text">Run</span>'; lucide.createIcons(); }
+                UI.switchTab('io');
+                // Emit run event to server
+                Socket.io.emit('run:start', { language: lang, code: code });
+            },
+
+            stop() {
+                Socket.io.emit('run:stop');
             }
         };
 
@@ -968,6 +1081,7 @@
         });
         
         Editor.init();
+        TerminalUI.init();
     </script>
 </body>
 </html>
