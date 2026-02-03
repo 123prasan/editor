@@ -4,199 +4,333 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>CollabCode Enterprise | Room <%= roomid %></title>
+    <title>CollabCode | Room <%= roomid %></title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    
     <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
 
     <style>
-        /* --- DESIGN SYSTEM (Midnight Pro) --- */
         :root {
+            /* --- THEME VARIABLES --- */
             --bg-app: #09090b;
-            --bg-panel: #141417;
-            --bg-sidebar: #0c0c0e;
-            --bg-active: #27272a;
+            --bg-panel: #18181b;
+            --bg-sidebar: #18181b;
             --border: #27272a;
-            --primary: #22c55e;
-            --primary-hover: #16a34a;
-            --primary-glow: rgba(34, 197, 94, 0.2);
+            
+            --primary: #10b981;
+            --primary-hover: #059669;
+            --primary-glow: rgba(16, 185, 129, 0.15);
+            
             --danger: #ef4444;
-            --warning: #f59e0b;
-            --text-main: #e4e4e7;
+            --text-main: #f4f4f5;
             --text-muted: #a1a1aa;
-            --header-h: 56px;
-            --font-ui: 'Inter', sans-serif;
-            --font-code: 'JetBrains Mono', monospace;
+            
+            --header-h: 60px;
         }
 
-        * { box-sizing: border-box; outline: none; }
+        * { box-sizing: border-box; margin: 0; padding: 0; outline: none; }
 
         body {
-            margin: 0; background: var(--bg-app); color: var(--text-main);
-            font-family: var(--font-ui); height: 100vh; display: flex;
-            flex-direction: column; overflow: hidden;
+            background: var(--bg-app);
+            color: var(--text-main);
+            font-family: 'Inter', sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
+
+        /* --- HEADER --- */
+        .app-header {
+            height: var(--header-h);
+            background: rgba(24, 24, 27, 0.95);
+            border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 16px; z-index: 50;
+        }
+
+        .brand-group { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); transition: 0.3s; }
+        .status-dot.online { background: var(--primary); box-shadow: 0 0 8px var(--primary-glow); }
+        
+        .timer-badge {
+            background: #27272a; border: 1px solid var(--border); padding: 4px 10px; border-radius: 20px;
+            font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px;
+            white-space: nowrap;
+        }
+
+        /* --- SCROLLABLE TOOLBAR (Mobile Fix) --- */
+        .toolbar { 
+            display: flex; gap: 8px; align-items: center; 
+            overflow-x: auto; /* Scroll horizontally */
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none; /* Hide scrollbar Firefox */
+            padding-left: 10px; /* Space for scroll */
+            mask-image: linear-gradient(to right, transparent, black 10px); /* Fade edge */
+        }
+        .toolbar::-webkit-scrollbar { display: none; } /* Hide scrollbar Chrome */
+        .toolbar > * { flex-shrink: 0; } /* Prevent buttons from squishing */
 
         /* --- LAYOUT --- */
-        .app-header {
-            height: var(--header-h); background: rgba(9, 9, 11, 0.95);
-            border-bottom: 1px solid var(--border); display: flex;
-            align-items: center; justify-content: space-between; padding: 0 16px; z-index: 50;
-        }
-
-        .workspace { display: flex; flex: 1; height: calc(100vh - var(--header-h) - 28px); position: relative; }
-
+        .workspace { display: flex; flex: 1; height: calc(100vh - var(--header-h) - 24px); position: relative; }
+        
         .sidebar {
             width: 260px; background: var(--bg-sidebar); border-right: 1px solid var(--border);
-            display: flex; flex-direction: column; transition: transform 0.3s; z-index: 20;
+            display: flex; flex-direction: column; z-index: 40; transition: transform 0.3s ease;
+        }
+        
+        .editor-region { flex: 1; position: relative; min-width: 0; }
+        
+        .output-region {
+            width: 360px; background: var(--bg-panel); border-left: 1px solid var(--border);
+            display: flex; flex-direction: column; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative; z-index: 30;
         }
 
-        .editor-region { flex: 1; position: relative; min-width: 0; }
-
-        .output-region {
-            width: 350px; background: var(--bg-panel); border-left: 1px solid var(--border);
-            display: flex; flex-direction: column;
+        /* EXPANDED CONSOLE STATE */
+        .output-region.expanded {
+            position: absolute; top: 0; right: 0; bottom: 0;
+            width: 600px; /* Desktop widen */
+            box-shadow: -10px 0 30px rgba(0,0,0,0.5);
+            border-left: 1px solid var(--primary);
         }
 
         /* --- COMPONENTS --- */
         .btn {
-            display: inline-flex; align-items: center; justify-content: center;
-            height: 32px; padding: 0 12px; border-radius: 6px; font-size: 13px;
-            font-weight: 600; cursor: pointer; border: none; transition: 0.2s;
+            height: 36px; padding: 0 14px; border-radius: 6px; font-size: 13px; font-weight: 600;
+            cursor: pointer; border: 1px solid transparent; display: inline-flex; align-items: center; gap: 6px;
+            transition: all 0.2s; white-space: nowrap;
         }
-
         .btn-primary { background: var(--primary); color: #000; }
         .btn-primary:hover:not(:disabled) { background: var(--primary-hover); transform: translateY(-1px); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        .btn-icon { 
+            width: 36px; height: 36px; padding: 0; justify-content: center; 
+            background: transparent; color: var(--text-muted); 
+            border-radius: 6px; border: none; cursor: pointer; display: flex; align-items: center;
+        }
+        .btn-icon:hover { color: var(--text-main); background: #27272a; }
 
-        .btn-icon { background: transparent; color: var(--text-muted); width: 32px; padding: 0; border: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; border-radius: 4px; }
-        .btn-icon:hover { background: var(--bg-active); color: var(--text-main); }
-
-        .select-input {
-            height: 32px; background: var(--bg-app); border: 1px solid var(--border);
-            color: var(--text-main); border-radius: 6px; padding: 0 8px; font-size: 13px; cursor: pointer;
+        /* Sidebar Select */
+        select {
+            width: 100%; height: 36px; background: #27272a; border: 1px solid var(--border);
+            color: var(--text-main); border-radius: 6px; padding: 0 10px; font-size: 13px;
+            appearance: none; cursor: pointer; margin-bottom: 12px;
         }
 
-        .badge {
-            padding: 4px 8px; border-radius: 4px; font-size: 11px; font-family: var(--font-code);
-            background: var(--bg-active); border: 1px solid var(--border);
+        /* --- USER LIST --- */
+        .section-title {
+            padding: 14px 16px; font-size: 11px; font-weight: 700; letter-spacing: 0.05em;
+            color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border);
         }
-        .badge.danger { background: rgba(239, 68, 68, 0.1); color: var(--danger); border-color: var(--danger); }
-
-        /* --- USER ITEM --- */
+        
         .user-item {
-            padding: 8px 16px; display: flex; align-items: center; gap: 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.03);
+            padding: 10px 16px; display: flex; align-items: center; gap: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.03); transition: background 0.2s;
         }
         .user-item:hover { background: rgba(255,255,255,0.02); }
+        .avatar {
+            width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center;
+            font-size: 11px; font-weight: 700; flex-shrink: 0;
+        }
 
-        /* --- TERMINAL --- */
-        .panel-tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--bg-sidebar); }
+        /* --- REFINED CONSOLE --- */
+        .panel-tabs { 
+            display: flex; border-bottom: 1px solid var(--border); 
+            background: #121214; justify-content: space-between; align-items: center;
+            padding-right: 8px;
+        }
+        .tab-group { display: flex; }
         .panel-tab {
-            flex: 1; padding: 10px; text-align: center; font-size: 12px; font-weight: 600;
+            padding: 12px 16px; font-size: 12px; font-weight: 600;
             color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent;
         }
         .panel-tab.active { color: var(--text-main); border-bottom-color: var(--primary); background: var(--bg-panel); }
-
-        .panel-content { flex: 1; display: none; flex-direction: column; overflow: hidden; }
+        
+        .panel-content { flex: 1; display: none; flex-direction: column; overflow: hidden; background: #0c0c0e; }
         .panel-content.active { display: flex; }
-
+        
         .terminal-display {
-            flex: 1; padding: 16px; font-family: var(--font-code); font-size: 13px;
-            overflow-y: auto; white-space: pre-wrap;
+            flex: 1; padding: 16px; font-family: 'JetBrains Mono', monospace; font-size: 13px;
+            overflow-y: auto; white-space: pre-wrap; color: #d4d4d8; line-height: 1.6;
         }
-
-        .terminal-input {
-            height: 80px; background: var(--bg-sidebar); border-top: 1px solid var(--border);
-            color: var(--text-main); padding: 12px; border: none; resize: none; font-family: var(--font-code);
+        
+        /* Integrated Input */
+        .console-input-wrapper {
+            padding: 10px; border-top: 1px solid var(--border); background: #121214;
+            display: flex; gap: 8px; align-items: center;
         }
-
-        /* --- UTILS --- */
-        .loader {
-            width: 30px; height: 30px; border: 3px solid var(--border);
-            border-top-color: var(--primary); border-radius: 50%; animation: spin 1s infinite;
+        .console-prompt { color: var(--primary); font-family: 'JetBrains Mono'; font-weight: bold; }
+        #stdin-input {
+            flex: 1; background: transparent; border: none; color: #fff; 
+            font-family: 'JetBrains Mono'; font-size: 13px;
         }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .toast-container { position: fixed; bottom: 40px; right: 24px; z-index: 300; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
-        .toast {
-            pointer-events: auto; background: var(--bg-panel); border: 1px solid var(--border);
-            padding: 12px 16px; border-radius: 8px; font-weight: 500; font-size: 13px;
-            display: flex; align-items: center; gap: 10px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-            animation: slideIn 0.3s ease;
-        }
-        @keyframes slideIn { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
+        
         /* --- FOOTER --- */
         .app-footer {
             height: 28px; background: var(--bg-sidebar); border-top: 1px solid var(--border);
-            display: flex; align-items: center; padding: 0 16px; font-family: var(--font-code);
-            font-size: 11px; color: var(--text-muted); gap: 16px;
+            display: flex; align-items: center; padding: 0 16px; font-size: 11px; color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace; justify-content: space-between;
+        }
+
+        /* --- VIDEO GRID --- */
+        .video-container {
+            position: fixed; bottom: 40px; right: 20px; 
+            width: 420px; max-height: 600px;
+            background: rgba(24, 24, 27, 0.95); backdrop-filter: blur(12px);
+            border: 1px solid var(--border); border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5); z-index: 100;
+            display: flex; flex-direction: column;
+            transition: width 0.3s, height 0.3s;
+        }
+        .video-container.hidden { display: none !important; }
+        .video-container.minimized { height: 54px; overflow: hidden; width: 280px; }
+
+        .video-header {
+            padding: 12px 16px; border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
+            background: rgba(255,255,255,0.03); font-size: 13px; font-weight: 600;
+            cursor: grab; user-select: none;
+        }
+        .video-header:active { cursor: grabbing; }
+
+        .video-controls { display: flex; gap: 8px; }
+        .control-btn {
+            width: 28px; height: 28px; border-radius: 6px; border: none;
+            background: rgba(255,255,255,0.05); color: var(--text-main);
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            transition: 0.2s;
+        }
+        .control-btn:hover { background: var(--primary); color: #000; }
+        .control-btn.danger { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+        .control-btn.danger:hover { background: var(--danger); color: #fff; }
+        .control-btn.off { background: var(--danger); color: white; }
+
+        .videos-wrapper {
+            padding: 12px; overflow-y: auto; flex: 1;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 8px; align-content: start;
+        }
+
+        .video-card {
+            position: relative; width: 100%; aspect-ratio: 4/3; 
+            background: #000; border-radius: 8px; overflow: hidden; 
+            border: 1px solid var(--border);
+        }
+        .video-card video { width: 100%; height: 100%; object-fit: cover; }
+        .user-label {
+            position: absolute; bottom: 4px; left: 4px; 
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            color: white; font-size: 10px; padding: 2px 6px; border-radius: 4px;
+            font-weight: 600; pointer-events: none;
+        }
+        
+        .mute-specific-btn {
+            position: absolute; top: 4px; right: 4px;
+            width: 24px; height: 24px; border-radius: 50%; border: none;
+            background: rgba(0,0,0,0.4); color: #fff; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            backdrop-filter: blur(4px);
+        }
+        .mute-specific-btn:hover { background: rgba(255,255,255,0.2); }
+        .mute-specific-btn.muted { background: var(--danger); }
+
+        /* --- MOBILE ADJUSTMENTS --- */
+        @media(max-width: 900px) {
+            .workspace { flex-direction: column; }
+            .sidebar { 
+                position: fixed; top: var(--header-h); bottom: 0; left: 0;
+                transform: translateX(-100%); width: 280px; 
+                box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5); 
+            }
+            .sidebar.open { transform: translateX(0); }
+            
+            /* Output Region Mobile: Bottom Sheet */
+            .output-region { 
+                width: 100%; height: 35vh; 
+                border-left: none; border-top: 1px solid var(--border); 
+            }
+            
+            /* Expanded Mobile Console */
+            .output-region.expanded {
+                height: 85vh !important; /* Y-Direction Expansion */
+                width: 100%; top: auto;
+                box-shadow: 0 -10px 30px rgba(0,0,0,0.5);
+                border-left: none; border-top: 1px solid var(--primary);
+            }
+            
+            /* Mobile Video = Bottom Sheet */
+            .video-container {
+                width: 100% !important; max-width: 100%;
+                bottom: 0; right: 0; left: 0; top: auto !important; 
+                border-radius: 16px 16px 0 0; border-bottom: none;
+                max-height: 60vh;
+            }
+            .video-header { cursor: default; } /* No dragging on mobile */
+            
+            .btn-text { display: none; }
+            @media(min-width: 500px) { .btn-text { display: inline; } }
         }
 
         /* --- MODAL --- */
-        #password-overlay { backdrop-filter: blur(5px); }
-
-        @media(max-width: 900px) {
-            .workspace { flex-direction: column; }
-            .sidebar { display: none; position: absolute; height: 100%; box-shadow: 10px 0 30px rgba(0, 0, 0, 0.5); }
-            .sidebar.open { display: flex; }
-            .output-region { width: 100%; height: 35vh; border-left: none; border-top: 1px solid var(--border); }
+        #password-overlay { backdrop-filter: blur(8px); }
+        .modal-card {
+            background: #18181b; border: 1px solid var(--border); padding: 32px; border-radius: 16px;
+            width: 320px; text-align: center; box-shadow: 0 20px 40px -10px rgba(0,0,0,0.5);
+            animation: fadeIn 0.3s ease-out;
         }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
     </style>
 </head>
-
 <body>
 
     <% if (requiresPassword) { %>
-    <div id="password-overlay" style="position:fixed; inset:0; background:rgba(9,9,11,0.8); z-index:9999; display:flex; align-items:center; justify-content:center;">
-        <div style="background:#141417; border:1px solid var(--border); padding:32px; border-radius:12px; width:320px; text-align:center; box-shadow:0 20px 40px -10px rgba(0,0,0,0.5);">
-            <div style="margin-bottom:16px; color:var(--primary);"><i data-lucide="lock" width="32"></i></div>
-            <h3 style="margin:0 0 8px 0; color:var(--text-main);">Private Session</h3>
-            <p style="margin:0 0 20px 0; color:var(--text-muted); font-size:13px;">Enter password to join this room.</p>
-            <input type="password" id="join-password" placeholder="Password" style="width:100%; height:40px; background:var(--bg-app); border:1px solid var(--border); color:#fff; padding:0 12px; border-radius:6px; margin-bottom:16px;">
+    <div id="password-overlay" style="position:fixed; inset:0; background:rgba(0,0,0,0.8); z-index:9999; display:flex; align-items:center; justify-content:center;">
+        <div class="modal-card">
+            <div style="width:48px; height:48px; background:rgba(16,185,129,0.1); border-radius:12px; color:var(--primary); display:flex; align-items:center; justify-content:center; margin:0 auto 16px auto;">
+                <i data-lucide="lock" width="24"></i>
+            </div>
+            <h3 style="margin-bottom:8px; color:#fff; font-size:16px;">Private Session</h3>
+            <p style="margin-bottom:20px; color:#a1a1aa; font-size:13px;">Enter password to join.</p>
+            <input type="password" id="join-password" placeholder="Password" style="width:100%; height:40px; background:#27272a; border:1px solid #3f3f46; color:#fff; padding:0 12px; border-radius:6px; margin-bottom:12px; font-size:14px;">
             <button onclick="Socket.attemptJoin()" class="btn btn-primary" style="width:100%; height:40px;">Unlock Room</button>
-            <div id="password-error" style="color:var(--danger); font-size:12px; margin-top:12px; display:none;"></div>
+            <div id="password-error" style="color:#ef4444; font-size:12px; margin-top:12px; display:none;">Incorrect Password</div>
         </div>
     </div>
     <% } %>
 
-    <div id="loading-overlay" style="position:fixed; inset:0; background:rgba(9,9,11,0.95); z-index:500; display:flex; align-items:center; justify-content:center; flex-direction:column;">
-        <div class="loader"></div>
-        <div style="margin-top:16px; font-weight:600; color:var(--text-muted);">Connecting to Environment...</div>
-    </div>
-
-    <div id="toast-area" class="toast-container"></div>
+    <div id="toast-area" style="position:fixed; bottom:30px; right:20px; z-index:300; display:flex; flex-direction:column; gap:10px; pointer-events:none;"></div>
 
     <header class="app-header">
-        <div style="display:flex; gap:16px; align-items:center;">
-            <div style="font-weight:700; display:flex; align-items:center; gap:10px;">
-                <div id="status-dot" style="width:8px; height:8px; border-radius:50%; background:var(--danger);"></div>
-                CollabCode
+        <div class="brand-group">
+            <button class="btn-icon" onclick="UI.toggleSidebar()"><i data-lucide="menu" width="20"></i></button>
+            <div style="font-weight:700; display:flex; align-items:center; gap:10px; font-size:15px;">
+                <div id="status-dot" class="status-dot"></div> CollabCode
             </div>
-            <button class="btn-icon" onclick="UI.toggleSidebar()"><i data-lucide="panel-left" width="18"></i></button>
-            <div class="badge" id="timer-display" style="display:flex; gap:6px; align-items:center;">
-                <i data-lucide="clock" width="12"></i> --:--:--
-            </div>
+            <div class="timer-badge" id="timer-display"><i data-lucide="clock" width="12"></i> --:--:--</div>
         </div>
 
-        <div style="display:flex; gap:12px; align-items:center;">
-            <select id="language-select" class="select-input" style="width:140px;">
-                <option value="javascript">JavaScript</option>
-                <option value="python">Python</option>
-                <option value="java">Java</option>
-                <option value="cpp">C++</option>
-                <option value="html">HTML5</option>
-            </select>
+        <div class="toolbar">
+            <button class="btn btn-primary" id="join-call-btn" onclick="RTC.joinCall()" title="Start Video Call">
+                <i data-lucide="video" width="16"></i> <span class="btn-text">Join Call</span>
+            </button> 
+            
             <button class="btn btn-primary" id="run-btn" onclick="Runner.execute()">
-                <i data-lucide="play" width="14"></i> Run
+                <i data-lucide="play" width="16"></i> <span class="btn-text">Run</span>
             </button>
-            <button class="btn-icon" onclick="UI.shareRoom()" title="Share"><i data-lucide="share-2" width="18"></i></button>
+
+            <button class="btn btn-icon" onclick="UI.shareRoom()" title="Copy Link"><i data-lucide="share-2" width="18"></i></button>
             
             <% if (isOwner) { %>
-            <button class="btn-icon" onclick="Socket.destroyRoom()" title="Destroy Room" style="color:var(--danger);">
+            <button class="btn btn-icon" onclick="Socket.destroyRoom()" title="Destroy Room" style="color:var(--danger);">
                 <i data-lucide="trash-2" width="18"></i>
             </button>
             <% } %>
@@ -205,13 +339,23 @@
 
     <div class="workspace">
         <aside class="sidebar" id="sidebar">
-            <div style="padding:16px; border-bottom:1px solid var(--border); font-weight:600; font-size:12px; color:var(--text-muted);">
-                ACTIVE USERS (<span id="user-count">0</span>)
+            <div class="section-title">Environment</div>
+            <div style="padding: 0 16px;">
+                <select id="language-select">
+                    <option value="javascript">JavaScript</option>
+                    <option value="python">Python</option>
+                    <option value="java">Java</option>
+                    <option value="cpp">C++</option>
+                    <option value="html">HTML5</option>
+                </select>
             </div>
-            <div id="user-list" style="flex:1; overflow-y:auto; padding:8px;"></div>
+
+            <div class="section-title">Active Members (<span id="user-count">0</span>)</div>
+            <div id="user-list" style="flex:1; overflow-y:auto;"></div>
+            
             <div style="padding:16px; border-top:1px solid var(--border);">
                 <button class="btn" style="width:100%; background:var(--bg-active); color:var(--text-main);" onclick="Editor.download()">
-                    <i data-lucide="download" width="14"></i> Download
+                    <i data-lucide="download" width="14"></i> Download Code
                 </button>
             </div>
         </aside>
@@ -220,20 +364,28 @@
             <div id="monaco-container" style="width:100%; height:100%;"></div>
         </main>
 
-        <aside class="output-region">
+        <aside class="output-region" id="output-region">
             <div class="panel-tabs">
-                <div class="panel-tab active" onclick="UI.switchTab('io')">Console</div>
-                <div class="panel-tab" onclick="UI.switchTab('web')">Preview</div>
+                <div class="tab-group">
+                    <div class="panel-tab active" onclick="UI.switchTab('io')">Console</div>
+                    <div class="panel-tab" onclick="UI.switchTab('web')">Web Preview</div>
+                </div>
+                <button class="btn-icon" onclick="UI.toggleConsoleSize()" title="Expand/Collapse">
+                    <i data-lucide="chevrons-up-down" width="16"></i>
+                </button>
             </div>
+            
             <div id="tab-io" class="panel-content active">
-                <div style="padding:8px; display:flex; justify-content:flex-end; border-bottom:1px solid var(--border);">
-                    <button class="btn-icon" onclick="UI.clearConsole()"><i data-lucide="trash-2" width="14"></i></button>
+                <div style="padding:8px; display:flex; justify-content:flex-end; border-bottom:1px solid #27272a;">
+                    <button class="btn-icon" onclick="UI.clearConsole()" style="width:28px; height:28px;"><i data-lucide="trash-2" width="14"></i></button>
                 </div>
-                <div id="console-output" class="terminal-display">
-                    <span style="opacity:0.5">// Output...</span>
+                <div id="console-output" class="terminal-display">// Output...</div>
+                <div class="console-input-wrapper">
+                    <span class="console-prompt">$</span>
+                    <input id="stdin-input" placeholder="Stdin input..." autocomplete="off">
                 </div>
-                <textarea id="stdin-input" class="terminal-input" placeholder="Stdin..."></textarea>
             </div>
+            
             <div id="tab-web" class="panel-content" style="background:white;">
                 <iframe id="web-frame" style="width:100%; height:100%; border:none;"></iframe>
             </div>
@@ -241,13 +393,38 @@
     </div>
 
     <footer class="app-footer">
-        <div id="access-badge" class="badge">Detecting...</div>
-        <div style="margin-left:auto;" id="cursor-coords">Ln 1, Col 1</div>
-        <div id="socket-id">Disconnected</div>
+        <div id="access-badge" style="color:var(--primary); font-weight:600;">CONNECTING...</div>
+        <div style="display:flex; gap:16px;">
+            <div id="socket-id" style="opacity:0.5;">ID: ---</div>
+            <div id="cursor-coords">Ln 1, Col 1</div>
+        </div>
     </footer>
 
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-    <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
+    <div id="video-grid" class="video-container hidden">
+        <div class="video-header" id="video-header">
+            <span>Team Call (<span id="video-count">0</span>)</span>
+            <div class="video-controls">
+                <button class="control-btn" onclick="RTC.toggleSize()" title="Minimize">
+                    <i data-lucide="minimize-2" width="16"></i>
+                </button>
+                <button class="control-btn" onclick="RTC.toggleAudio()" id="btn-mic" title="Toggle Mic">
+                    <i data-lucide="mic" width="16"></i>
+                </button>
+                <button class="control-btn" onclick="RTC.toggleVideo()" id="btn-cam" title="Toggle Cam">
+                    <i data-lucide="video" width="16"></i>
+                </button>
+                <button class="control-btn danger" onclick="RTC.leaveCall()" title="Leave Call">
+                    <i data-lucide="phone-off" width="16"></i>
+                </button>
+            </div>
+        </div>
+        <div id="videos-wrapper" class="videos-wrapper">
+            <div class="video-card local">
+                <video id="local-video" autoplay muted playsinline></video>
+                <div class="user-label">You</div>
+            </div>
+        </div>
+    </div>
 
     <script>
         lucide.createIcons();
@@ -292,9 +469,9 @@
             setLoading(show) { document.getElementById('loading-overlay').style.display = show ? 'flex' : 'none'; },
 
             setOnline(online) {
-                document.getElementById('status-dot').style.background = online ? 'var(--primary)' : 'var(--danger)';
-                document.getElementById('status-dot').style.boxShadow = online ? '0 0 8px var(--primary-glow)' : 'none';
-                if (online) this.setLoading(false);
+                const dot = document.getElementById('status-dot');
+                if (online) dot.classList.add('online');
+                else dot.classList.remove('online');
             },
 
             setAccess(level) {
@@ -303,18 +480,17 @@
                 const badge = document.getElementById('access-badge');
                 
                 badge.innerText = isView ? 'READ ONLY' : 'EDITOR ACCESS';
-                badge.className = isView ? 'badge danger' : 'badge';
+                badge.style.color = isView ? 'var(--danger)' : 'var(--primary)';
                 
                 document.getElementById('run-btn').disabled = isView;
                 document.getElementById('language-select').disabled = isView;
                 
                 if (Editor.monaco) Editor.monaco.updateOptions({ readOnly: isView });
-                
-                if (isView) this.toast("Spectator Mode Active", "warning");
+                if (isView) this.toast("View Only Mode", "warning");
             },
 
             updateTimer(expiryIso) {
-                if (!expiryIso) { document.getElementById('timer-display').innerText = "∞"; return; }
+                if (!expiryIso) { document.getElementById('timer-display').innerHTML = '<i data-lucide="infinity" width="14"></i>'; lucide.createIcons(); return; }
                 const end = new Date(expiryIso).getTime();
                 setInterval(() => {
                     const diff = end - Date.now();
@@ -337,34 +513,34 @@
                 Store.users.forEach((user, id) => {
                     const hue = Utils.getHue(id);
                     const color = `hsl(${hue}, 75%, 60%)`;
-                    const displayName = user.username || `User ${id.slice(0,4)}`;
+                    const name = user.username || `User ${id.slice(0,4)}`;
                     
-                    // KICK BUTTON LOGIC: Show only if I am owner AND user is not me
                     const isMe = id === myId;
                     const kickBtn = (Store.isOwner && !isMe) 
-                        ? `<button class="btn-icon" onclick="Socket.kickUser('${id}')" style="margin-left:auto; color:var(--danger); width:24px; height:24px; border-radius:4px;" title="Kick"><i data-lucide="ban" width="14"></i></button>` 
+                        ? `<button class="btn-icon" onclick="Socket.kickUser('${id}')" style="margin-left:auto; color:var(--danger); width:28px; height:28px; background:rgba(239,68,68,0.1);" title="Kick"><i data-lucide="ban" width="14"></i></button>` 
                         : '';
 
                     const el = document.createElement('div');
                     el.className = 'user-item';
                     el.innerHTML = `
-                        <div class="avatar" style="background:${color}20; color:${color}; border:1px solid ${color}40; width:24px; height:24px; border-radius:4px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:10px;">
-                            ${displayName.substring(0,2).toUpperCase()}
-                        </div> 
-                        <span style="font-size:13px;color:var(--text-main);">${displayName}</span>
+                        <div class="avatar" style="background:${color}20; color:${color}; border:1px solid ${color}40;">${name.substring(0,2).toUpperCase()}</div>
+                        <span style="font-size:13px; font-weight:500; color:#e4e4e7;">${name}</span>
                         ${kickBtn}
                     `;
                     list.appendChild(el);
                 });
-                lucide.createIcons(); // Refresh icons for new buttons
+                lucide.createIcons();
             },
 
             toast(msg, type = 'info') {
                 const area = document.getElementById('toast-area');
                 const el = document.createElement('div');
-                el.className = 'toast';
+                el.style.background = '#18181b'; el.style.border = '1px solid #27272a'; 
+                el.style.padding = '12px 16px'; el.style.borderRadius = '8px'; 
+                el.style.fontSize = '13px'; el.style.fontWeight = '500'; el.style.color = '#fff';
+                el.style.pointerEvents = 'auto'; el.style.boxShadow = '0 10px 15px -3px rgba(0,0,0,0.5)';
                 el.style.borderLeft = `4px solid ${type === 'warning' ? 'var(--warning)' : type === 'danger' ? 'var(--danger)' : 'var(--primary)'}`;
-                el.innerHTML = `<span>${msg}</span>`;
+                el.innerText = msg;
                 area.appendChild(el);
                 setTimeout(() => el.remove(), 3000);
             },
@@ -378,11 +554,193 @@
             },
 
             toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); },
+            
+            toggleConsoleSize() {
+                document.getElementById('output-region').classList.toggle('expanded');
+            },
+            
             clearConsole() { document.getElementById('console-output').innerText = "// Output cleared"; },
-            shareRoom() { navigator.clipboard.writeText(window.location.href); this.toast("Copied to Clipboard"); }
+            shareRoom() { navigator.clipboard.writeText(window.location.href); this.toast("Link Copied!"); }
         };
 
-        /* ================= EDITOR ENGINE ================= */
+        /* ================= WEBRTC MANAGER ================= */
+        const RTC = {
+            localStream: null,
+            peers: {}, 
+            config: { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] },
+            isMinimized: false,
+
+            initDrag() {
+                const el = document.getElementById("video-grid");
+                const header = document.getElementById("video-header");
+                if (window.innerWidth <= 900) return; // Disable drag on mobile
+
+                let isDragging = false, startX, startY, initialLeft, initialTop;
+
+                header.onmousedown = (e) => {
+                    if(e.target.closest('button')) return;
+                    e.preventDefault();
+                    startX = e.clientX; startY = e.clientY;
+                    
+                    const rect = el.getBoundingClientRect();
+                    initialLeft = rect.left; initialTop = rect.top;
+                    
+                    el.style.bottom = 'auto'; el.style.right = 'auto';
+                    el.style.left = initialLeft + 'px'; el.style.top = initialTop + 'px';
+
+                    document.onmouseup = () => { document.onmouseup = null; document.onmousemove = null; };
+                    document.onmousemove = (e) => {
+                        e.preventDefault();
+                        el.style.top = (initialTop + e.clientY - startY) + "px";
+                        el.style.left = (initialLeft + e.clientX - startX) + "px";
+                    };
+                };
+            },
+
+            toggleSize() {
+                const grid = document.getElementById('video-grid');
+                this.isMinimized = !this.isMinimized;
+                grid.classList.toggle('minimized', this.isMinimized);
+            },
+
+            async joinCall() {
+                if (Object.keys(this.peers).length >= 9) { UI.toast("Call full (Max 10)", "warning"); return; }
+                try {
+                    this.localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    document.getElementById('video-grid').classList.remove('hidden');
+                    document.getElementById('join-call-btn').style.display = 'none';
+                    document.getElementById('local-video').srcObject = this.localStream;
+                    
+                    this.initDrag();
+                    Socket.io.emit('join_room', { roomId: Store.roomId, password: null });
+                    UI.toast("Joined Call");
+                    this.updateCount();
+                } catch (e) {
+                    console.error(e);
+                    UI.toast("Camera Access Denied", "danger");
+                }
+            },
+
+            leaveCall() {
+                if(this.localStream) {
+                    this.localStream.getTracks().forEach(track => track.stop());
+                    this.localStream = null;
+                }
+                Object.values(this.peers).forEach(peer => peer.close());
+                this.peers = {};
+                document.getElementById('video-grid').classList.add('hidden');
+                document.getElementById('join-call-btn').style.display = 'inline-flex';
+                document.getElementById('videos-wrapper').innerHTML = `<div class="video-card local"><video id="local-video" autoplay muted playsinline></video><div class="user-label">You</div></div>`;
+                this.updateCount();
+            },
+
+            toggleAudio() {
+                if(!this.localStream) return;
+                const track = this.localStream.getAudioTracks()[0];
+                track.enabled = !track.enabled;
+                document.getElementById('btn-mic').classList.toggle('off', !track.enabled);
+                document.getElementById('btn-mic').innerHTML = track.enabled ? '<i data-lucide="mic" width="16"></i>' : '<i data-lucide="mic-off" width="16"></i>';
+                lucide.createIcons();
+            },
+
+            toggleVideo() {
+                if(!this.localStream) return;
+                const track = this.localStream.getVideoTracks()[0];
+                track.enabled = !track.enabled;
+                document.getElementById('btn-cam').classList.toggle('off', !track.enabled);
+                document.getElementById('btn-cam').innerHTML = track.enabled ? '<i data-lucide="video" width="16"></i>' : '<i data-lucide="video-off" width="16"></i>';
+                lucide.createIcons();
+            },
+
+            createPeer(targetId, initiator = false) {
+                if (Object.keys(this.peers).length >= 9) return null;
+                const peer = new RTCPeerConnection(this.config);
+                this.peers[targetId] = peer;
+
+                this.localStream.getTracks().forEach(track => peer.addTrack(track, this.localStream));
+
+                peer.onicecandidate = e => { if (e.candidate) Socket.io.emit("ice-candidate", { target: targetId, candidate: e.candidate }); };
+
+                peer.ontrack = e => {
+                    const stream = e.streams[0];
+                    let videoEl = document.getElementById(`video-${targetId}`);
+                    
+                    if (!videoEl) {
+                        const wrapper = document.createElement('div');
+                        wrapper.className = 'video-card';
+                        wrapper.id = `wrapper-${targetId}`;
+                        
+                        videoEl = document.createElement('video');
+                        videoEl.id = `video-${targetId}`;
+                        videoEl.autoplay = true; videoEl.playsInline = true;
+                        
+                        const label = document.createElement('div');
+                        label.className = 'user-label';
+                        const user = Store.users.get(targetId);
+                        label.innerText = user ? user.username : "Guest";
+
+                        // Mute button for specific user
+                        const muteBtn = document.createElement('button');
+                        muteBtn.className = 'mute-specific-btn';
+                        muteBtn.innerHTML = '<i data-lucide="mic" width="14"></i>';
+                        muteBtn.onclick = () => {
+                             videoEl.muted = !videoEl.muted;
+                             muteBtn.classList.toggle('muted', videoEl.muted);
+                             muteBtn.innerHTML = videoEl.muted ? '<i data-lucide="mic-off" width="14"></i>' : '<i data-lucide="mic" width="14"></i>';
+                             lucide.createIcons();
+                        };
+
+                        wrapper.appendChild(videoEl);
+                        wrapper.appendChild(label);
+                        wrapper.appendChild(muteBtn);
+                        document.getElementById('videos-wrapper').appendChild(wrapper);
+                        this.updateCount();
+                        lucide.createIcons();
+                    }
+                    videoEl.srcObject = stream;
+                };
+
+                if (initiator) {
+                    peer.createOffer().then(offer => {
+                        peer.setLocalDescription(offer);
+                        Socket.io.emit("offer", { target: targetId, sdp: offer });
+                    });
+                }
+                return peer;
+            },
+
+            handleOffer(data) {
+                if (!this.localStream) return;
+                const peer = this.createPeer(data.caller, false);
+                if (!peer) return;
+                peer.setRemoteDescription(new RTCSessionDescription(data.sdp));
+                peer.createAnswer().then(answer => {
+                    peer.setLocalDescription(answer);
+                    Socket.io.emit("answer", { target: data.caller, sdp: answer });
+                });
+            },
+
+            handleAnswer(data) {
+                const peer = this.peers[data.caller];
+                if (peer) peer.setRemoteDescription(new RTCSessionDescription(data.sdp));
+            },
+
+            handleCandidate(data) {
+                const peer = this.peers[data.caller];
+                if (peer) peer.addIceCandidate(new RTCIceCandidate(data.candidate));
+            },
+            
+            removePeer(userId) {
+                if(this.peers[userId]) { this.peers[userId].close(); delete this.peers[userId]; }
+                const el = document.getElementById(`wrapper-${userId}`);
+                if(el) el.remove();
+                this.updateCount();
+            },
+
+            updateCount() { document.getElementById('video-count').innerText = Object.keys(this.peers).length + 1; }
+        };
+
+        /* ================= EDITOR & SOCKET ================= */
         const Editor = {
             monaco: null,
             remoteCursors: {},
@@ -391,32 +749,25 @@
             init() {
                 require.config({ paths: { vs: "https://unpkg.com/monaco-editor@0.45.0/min/vs" } });
                 require(["vs/editor/editor.main"], () => {
-                    monaco.editor.defineTheme('midnight', { base: 'vs-dark', inherit: true, rules: [], colors: { 'editor.background': '#09090b' } });
-
                     this.monaco = monaco.editor.create(document.getElementById("monaco-container"), {
                         value: "// Connecting...",
-                        language: "javascript", 
-                        theme: "midnight",
+                        language: "javascript", theme: "vs-dark",
                         automaticLayout: true, fontSize: 14, fontFamily: "'JetBrains Mono', monospace",
-                        minimap: { enabled: true, scale: 0.75 }, padding: { top: 20 }, 
-                        readOnly: true
+                        minimap: { enabled: true, scale: 0.75 }, padding: { top: 20 }, readOnly: true
                     });
 
                     this.monaco.onDidChangeModelContent(e => {
                         if (Store.isTransactionRemote || !Store.isSynced) return;
                         Socket.emitOp(e.changes, Store.docVersion);
                     });
-
                     this.monaco.onDidChangeCursorPosition(e => {
                         Socket.emitCursor(e.position);
                         document.getElementById('cursor-coords').innerText = `Ln ${e.position.lineNumber}, Col ${e.position.column}`;
                     });
-
                     this.monaco.onDidChangeCursorSelection(e => {
-                        if (e.selection.isEmpty()) Socket.emitSelectionClear();
+                        if(e.selection.isEmpty()) Socket.emitSelectionClear();
                         else Socket.emitSelection(e.selection);
                     });
-
                     Socket.connect();
                 });
             },
@@ -424,21 +775,17 @@
             setContent(content, version, lang) {
                 Store.isTransactionRemote = true;
                 const current = this.monaco.getValue();
-                
                 if (content !== null && (content !== current || !Store.isSynced)) {
                     this.monaco.setValue(content || Store.boilerplates[lang] || "");
                 }
-                
                 if (lang && lang !== Store.language) {
                     monaco.editor.setModelLanguage(this.monaco.getModel(), lang);
                     Store.language = lang;
                     document.getElementById('language-select').value = lang;
                 }
-                
                 Store.docVersion = version;
                 Store.isSynced = true;
                 Store.isTransactionRemote = false;
-                
                 this.monaco.updateOptions({ readOnly: Store.accessLevel === 'view' });
             },
 
@@ -450,64 +797,35 @@
                 Store.isTransactionRemote = false;
             },
 
-            ensureUserStyle(userId) {
+            ensureUserStyle(userId) { 
                 const styleId = `style-${userId}`;
                 if (document.getElementById(styleId)) return;
-
                 const hue = Utils.getHue(userId);
                 const colorSolid = `hsl(${hue}, 75%, 60%)`;
                 const colorTransparent = `hsla(${hue}, 75%, 60%, 0.25)`;
-
                 const style = document.createElement('style');
                 style.id = styleId;
-                style.innerHTML = `
-                    .cur-${userId} { border-left: 2px solid ${colorSolid} !important; }
-                    .cur-${userId}::after { 
-                        content: "${userId.slice(0, 4)}"; position: absolute; top: -18px; left: -2px; 
-                        background: ${colorSolid}; color: #000; font-size: 10px; padding: 1px 4px; border-radius: 4px; 
-                        font-weight: bold; pointer-events: none; white-space: nowrap; z-index: 10;
-                    }
-                    .sel-${userId} { background-color: ${colorTransparent} !important; }
-                `;
+                style.innerHTML = `.cur-${userId} { border-left: 2px solid ${colorSolid} !important; } .cur-${userId}::after { content: "${userId.slice(0, 4)}"; position: absolute; top: -18px; left: -2px; background: ${colorSolid}; color: #000; font-size: 10px; padding: 1px 4px; border-radius: 4px; font-weight: bold; pointer-events: none; white-space: nowrap; z-index: 10; } .sel-${userId} { background-color: ${colorTransparent} !important; }`;
                 document.head.appendChild(style);
             },
-
-            updateRemoteCursor(userId, position) {
+            updateRemoteCursor(userId, pos) {
                 this.ensureUserStyle(userId);
-                const decorations = [{
-                    range: new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column),
-                    options: { className: `cur-${userId}` }
-                }];
-                this.remoteCursors[userId] = this.monaco.deltaDecorations(this.remoteCursors[userId] || [], decorations);
+                this.remoteCursors[userId] = this.monaco.deltaDecorations(this.remoteCursors[userId] || [], [{ range: new monaco.Range(pos.lineNumber, pos.column, pos.lineNumber, pos.column), options: { className: `cur-${userId}` } }]);
             },
-
-            updateRemoteSelection(userId, selection) {
+            updateRemoteSelection(userId, sel) {
                 this.ensureUserStyle(userId);
-                if (selection.startLineNumber === selection.endLineNumber && selection.startColumn === selection.endColumn) {
-                    this.clearRemoteSelection(userId);
-                    return;
-                }
-                const decorations = [{
-                    range: new monaco.Range(selection.startLineNumber, selection.startColumn, selection.endLineNumber, selection.endColumn),
-                    options: { inlineClassName: `sel-${userId}` }
-                }];
-                this.remoteSelections[userId] = this.monaco.deltaDecorations(this.remoteSelections[userId] || [], decorations);
+                if (sel.startLineNumber === sel.endLineNumber && sel.startColumn === sel.endColumn) { this.clearRemoteSelection(userId); return; }
+                this.remoteSelections[userId] = this.monaco.deltaDecorations(this.remoteSelections[userId] || [], [{ range: new monaco.Range(sel.startLineNumber, sel.startColumn, sel.endLineNumber, sel.endColumn), options: { inlineClassName: `sel-${userId}` } }]);
             },
-
             clearRemoteSelection(userId) {
-                if (this.remoteSelections[userId]) {
-                    this.monaco.deltaDecorations(this.remoteSelections[userId], []);
-                    delete this.remoteSelections[userId];
-                }
+                if (this.remoteSelections[userId]) { this.monaco.deltaDecorations(this.remoteSelections[userId], []); delete this.remoteSelections[userId]; }
             },
-
             removeUser(userId) {
                 if (this.remoteCursors[userId]) this.monaco.deltaDecorations(this.remoteCursors[userId], []);
                 this.clearRemoteSelection(userId);
                 const style = document.getElementById(`style-${userId}`);
                 if (style) style.remove();
             },
-
             download() {
                 const blob = new Blob([this.monaco.getValue()], { type: "text/plain" });
                 const a = document.createElement("a");
@@ -517,7 +835,6 @@
             }
         };
 
-        /* ================= SOCKET ================= */
         const Socket = {
             io: null,
             requiresPassword: <%= requiresPassword %>, 
@@ -526,14 +843,14 @@
                 if (this.requiresPassword) return;
                 this.initConnection(null);
             },
-            
+
             attemptJoin() {
                 const pass = document.getElementById('join-password').value;
                 this.initConnection(pass);
             },
             
             destroyRoom() {
-                if(confirm("Are you sure? This will delete the room permanently.")) {
+                if(confirm("DANGER: This will delete the room permanently.")) {
                     this.io.emit('destroy_room');
                 }
             },
@@ -546,82 +863,70 @@
 
             initConnection(password) {
                 this.io = io();
+                
                 this.io.on('connect', () => {
                     UI.setOnline(true);
-                    document.getElementById('socket-id').innerText = `ID: ${this.io.id.slice(0, 6)}`;
+                    document.getElementById('socket-id').innerText = `ID: ${this.io.id.slice(0,6)}`;
                     this.io.emit('join_room', { roomId: Store.roomId, password });
                 });
-                
-                this.io.on('disconnect', () => UI.setOnline(false));
 
-                // --- DATA SYNC ---
+                this.io.on("offer", data => RTC.handleOffer({ ...data, caller: data.originId }));
+                this.io.on("answer", data => RTC.handleAnswer({ ...data, caller: data.originId }));
+                this.io.on("ice-candidate", data => RTC.handleCandidate({ ...data, caller: data.originId }));
+
                 this.io.on('syncSnapshot', (data) => {
                     if (this.requiresPassword) {
                         const overlay = document.getElementById('password-overlay');
                         if(overlay) overlay.remove();
                     }
-                    
-                    // Save Ownership State
                     Store.isOwner = data.isOwner;
-
                     if (data.expiry) UI.updateTimer(data.expiry);
-                    if (data.accessLevel) Store.accessLevel = data.accessLevel;
-                    UI.setAccess(Store.accessLevel);
+                    if (data.accessLevel) { Store.accessLevel = data.accessLevel; UI.setAccess(Store.accessLevel); }
                     
                     Store.users = new Map();
                     if(data.users) data.users.forEach(u => Store.users.set(u.id, u));
-                    UI.updateUsers(); // This now renders kick buttons if owner
-
+                    UI.updateUsers();
                     Editor.setContent(data.content, data.version, data.language);
-                    
                     UI.toast("Joined Successfully");
                 });
-                
-                this.io.on('roomDestroyed', () => {
-                    alert("This room has been destroyed.");
-                    window.location.href = '/';
-                });
-
-                this.io.on('kicked', () => {
-                    alert("You have been kicked from this room.");
-                    window.location.href = '/';
-                });
-
-                this.io.on('error', (msg) => {
-                    if (this.requiresPassword && document.getElementById('password-overlay')) {
-                        const err = document.getElementById('password-error');
-                        err.innerText = msg; err.style.display = 'block';
-                        this.io.disconnect();
-                    } else {
-                        UI.toast(msg, 'warning');
-                    }
-                });
-
-                this.io.on('editorOp', (data) => Editor.applyEdits(data.changes, data.version));
-                this.io.on('resync', (data) => { Editor.setContent(data.content, data.version, data.language); UI.toast("Resynced", "warning"); });
-                this.io.on('languageUpdate', (lang) => { Editor.setContent(null, Store.docVersion, lang); UI.toast(`Lang: ${lang}`); });
-
-                // --- PRESENCE ---
-                this.io.on('cursorUpdate', ({ userId, position }) => {
-                    if (!Store.users.has(userId)) Store.users.set(userId, { username: 'Guest' });
-                    Editor.updateRemoteCursor(userId, position);
-                });
-
-                this.io.on('selectionUpdate', ({ userId, selection }) => Editor.updateRemoteSelection(userId, selection));
-                this.io.on('selectionClear', (userId) => Editor.clearRemoteSelection(userId));
 
                 this.io.on('userJoined', ({ user }) => {
-                    Store.users.set(user.id, user); 
+                    Store.users.set(user.id, user);
                     UI.updateUsers();
                     UI.toast(`${user.username} Joined`);
+                    if (RTC.localStream) RTC.createPeer(user.id, true);
                 });
 
                 this.io.on('userLeft', ({ userId }) => {
                     Store.users.delete(userId);
                     UI.updateUsers();
                     Editor.removeUser(userId);
+                    RTC.removePeer(userId);
                     UI.toast("User Left");
                 });
+
+                this.io.on('roomDestroyed', () => { alert("Room closed."); window.location.href = '/'; });
+                this.io.on('kicked', () => { alert("Kicked from room."); window.location.href = '/'; });
+                this.io.on('error', (msg) => {
+                    if (this.requiresPassword && document.getElementById('password-overlay')) {
+                        document.getElementById('password-error').innerText = msg;
+                        document.getElementById('password-error').style.display = 'block';
+                        this.io.disconnect();
+                    } else UI.toast(msg, 'danger');
+                });
+
+                this.io.on('editorOp', (data) => Editor.applyEdits(data.changes, data.version));
+                this.io.on('resync', (data) => Editor.setContent(data.content, data.version, data.language));
+                this.io.on('languageUpdate', (lang) => Editor.setContent(null, Store.docVersion, lang));
+                
+                this.io.on('cursorUpdate', ({ userId, position }) => {
+                    if (!Store.users.has(userId)) Store.users.set(userId, { username: 'Guest' });
+                    Editor.updateRemoteCursor(userId, position);
+                });
+                
+                this.io.on('selectionUpdate', ({ userId, selection }) => Editor.updateRemoteSelection(userId, selection));
+                this.io.on('selectionClear', (userId) => Editor.clearRemoteSelection(userId));
+                this.io.on('disconnect', () => UI.setOnline(false));
             },
 
             emitOp(changes, v) { this.io.emit('editorOp', { roomId: Store.roomId, changes, baseVersion: v }); },
@@ -631,7 +936,6 @@
             emitLang(lang) { this.io.emit('languageChange', { roomId: Store.roomId, language: lang }); }
         };
 
-        /* ================= RUNNER ================= */
         const Runner = {
             async execute() {
                 if (Store.accessLevel === 'view') return;
@@ -640,13 +944,7 @@
                 const btn = document.getElementById('run-btn');
                 const out = document.getElementById('console-output');
 
-                if (lang === 'html') {
-                    const doc = document.getElementById('web-frame').contentDocument;
-                    doc.open(); doc.write(code); doc.close();
-                    UI.switchTab('web'); return;
-                }
-
-                btn.disabled = true; btn.innerHTML = `<div class="loader" style="width:14px; height:14px; border-width:2px; margin:0; display:inline-block"></div>`;
+                btn.disabled = true; btn.innerHTML = 'Running...';
                 out.innerText = "Running..."; UI.switchTab('io');
 
                 try {
@@ -657,10 +955,10 @@
                     const data = await res.json();
                     if (data.run) {
                         out.innerText = data.run.output || "No Output.";
-                        out.style.color = data.run.stderr ? "var(--danger)" : "var(--text-main)";
-                    } else out.innerText = "Error: " + data.message;
+                        out.style.color = data.run.stderr ? "var(--danger)" : "#d4d4d8";
+                    } else out.innerText = "Error: " + (data.message || "Unknown error");
                 } catch (e) { out.innerText = "Error: " + e.message; }
-                finally { btn.disabled = false; btn.innerHTML = `<i data-lucide="play" width="14"></i> Run`; lucide.createIcons(); }
+                finally { btn.disabled = false; btn.innerHTML = '<i data-lucide="play" width="16"></i> <span class="btn-text">Run</span>'; lucide.createIcons(); }
             }
         };
 
@@ -668,7 +966,7 @@
             if (Store.accessLevel === 'view') { e.target.value = Store.language; return; }
             Socket.emitLang(e.target.value);
         });
-
+        
         Editor.init();
     </script>
 </body>

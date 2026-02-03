@@ -29,8 +29,7 @@ const roomSchema = new mongoose.Schema({
     expiresAt: { type: Date, default: null, expires: 0 },
     content: { type: String, default: "" },
     version: { type: Number, default: 0 },
-    // --- UPDATED: Track Banned Users ---
-    bannedUsers: [{ type: String }], 
+    bannedUsers: [{ type: String }], // Track Banned User IDs
     lastActive: { type: Date, default: Date.now },
     createdAt: { type: Date, default: Date.now }
 });
@@ -115,7 +114,7 @@ app.get("/room/:id", requirePageLogin, async (req, res) => {
         const isOwner = room.ownerId.toString() === req.user._id.toString();
         const requiresPassword = room.isPrivate && !isOwner;
 
-        // NEW: Check if banned before rendering
+        // Check if banned before rendering
         if (room.bannedUsers && room.bannedUsers.includes(req.user._id.toString())) {
             return res.status(403).send("You have been banned from this room.");
         }
@@ -253,7 +252,7 @@ app.post("/api/create_room", requireAuth, async (req, res) => {
             expiresAt,
             content: "",
             version: 0,
-            bannedUsers: [] // Initialize empty list
+            bannedUsers: []
         });
 
         roomState[roomId] = {
@@ -263,7 +262,7 @@ app.post("/api/create_room", requireAuth, async (req, res) => {
             ownerId: req.user._id,
             isPrivate: !!isPrivate,
             password: password || null,
-            bannedUsers: [], // Initialize in memory
+            bannedUsers: [], 
             users: []
         };
 
@@ -305,6 +304,7 @@ io.on("connection", (socket) => {
         socket.join(roomId);
         socket.roomId = roomId;
 
+        // Initialize Room State if missing
         if (!roomState[roomId]) {
             let room = await Room.findOne({ roomId });
             if (room) {
@@ -318,7 +318,7 @@ io.on("connection", (socket) => {
                     ownerId: room.ownerId,
                     isPrivate: room.isPrivate,
                     password: room.password,
-                    bannedUsers: room.bannedUsers || [] // Load bans from DB
+                    bannedUsers: room.bannedUsers || []
                 };
             } else {
                 roomState[roomId] = { content: "", version: 0, language: "javascript", expiry: null, accessLevel: 'edit', users: [], ownerId: null };
@@ -329,14 +329,13 @@ io.on("connection", (socket) => {
         const isOwner = state.ownerId && socket.userId && (state.ownerId.toString() === socket.userId);
 
         // --- BAN CHECK ---
-        // If user is logged in (has userId) AND is in the banned list
         if (socket.userId && state.bannedUsers && state.bannedUsers.includes(socket.userId)) {
             socket.emit("error", "You have been banned from this room.");
             socket.disconnect();
             return;
         }
 
-        // Security Check (Password)
+        // --- SECURITY CHECK ---
         if (state.isPrivate && !isOwner) {
             if (state.password !== providedPassword) {
                 socket.emit("error", "Invalid Password");
@@ -345,19 +344,39 @@ io.on("connection", (socket) => {
             }
         }
 
+        // --- FETCH USER INFO & ENFORCE SINGLE SESSION ---
         let username = `Guest-${socket.id.slice(0, 4)}`;
+        let dbId = null;
+
         if (socket.userId) {
             const dbUser = await User.findById(socket.userId);
-            if (dbUser) username = dbUser.name;
+            if (dbUser) {
+                username = dbUser.name;
+                dbId = dbUser._id.toString();
+            }
         }
 
-        const user = { id: socket.id, username };
+        // Check if user is already in the room
+        if (dbId) {
+            const existingUser = state.users.find(u => u.dbId === dbId);
+            if (existingUser) {
+                // Notify & Disconnect the old socket
+                io.to(existingUser.id).emit("error", "New session started in another tab.");
+                const oldSocket = io.sockets.sockets.get(existingUser.id);
+                if (oldSocket) oldSocket.disconnect();
+                
+                // Remove from state immediately to prevent duplicates
+                state.users = state.users.filter(u => u.dbId !== dbId);
+            }
+        }
 
+        const user = { id: socket.id, username, dbId };
+
+        // Add to active users
         if (!state.users) state.users = [];
-        if (!state.users.find(u => u.id === socket.id)) {
-            state.users.push(user);
-        }
+        state.users.push(user);
 
+        // Determine Access Level
         let effectiveAccess = state.accessLevel;
         let isTimeBounded = false;
         let remainingSeconds = null;
@@ -372,8 +391,10 @@ io.on("connection", (socket) => {
         }
         if (isOwner) effectiveAccess = 'edit';
 
+        // Notify Dashboard & Room
         io.to('dashboard').emit('roomUpdate', { roomId, activeUsers: state.users.length });
 
+        // Send Snapshot to New User
         socket.emit("syncSnapshot", {
             content: state.content,
             version: state.version,
@@ -387,6 +408,7 @@ io.on("connection", (socket) => {
             ownerId: state.ownerId
         });
 
+        // Notify Existing Users
         socket.to(roomId).emit("userJoined", {
             user,
             users: state.users,
@@ -394,24 +416,36 @@ io.on("connection", (socket) => {
         });
     });
 
+    // --- WEBRTC SIGNALING (Fix for Video Call) ---
+    // Pass 'originId' so client knows WHO sent the message
+    socket.on("offer", (payload) => {
+        io.to(payload.target).emit("offer", { sdp: payload.sdp, originId: socket.id });
+    });
+
+    socket.on("answer", (payload) => {
+        io.to(payload.target).emit("answer", { sdp: payload.sdp, originId: socket.id });
+    });
+
+    socket.on("ice-candidate", (incoming) => {
+        io.to(incoming.target).emit("ice-candidate", { candidate: incoming.candidate, originId: socket.id });
+    });
+
     // --- KICK & BAN HANDLER ---
     socket.on('kick_user', async ({ targetSocketId }) => {
         const roomId = socket.roomId;
         if (!roomId || !roomState[roomId]) return;
 
-        // 1. Verify Owner
+        // Verify Owner
         const isOwner = roomState[roomId].ownerId && socket.userId && 
                         (roomState[roomId].ownerId.toString() === socket.userId);
         
         if (!isOwner) return;
 
-        // 2. Identify Target
         const targetSocket = io.sockets.sockets.get(targetSocketId);
         if (!targetSocket) return;
 
-        // 3. Add to Ban List (if they are a logged-in user)
+        // Add to Ban List
         if (targetSocket.userId) {
-            // Update Memory
             if (!roomState[roomId].bannedUsers) roomState[roomId].bannedUsers = [];
             if (!roomState[roomId].bannedUsers.includes(targetSocket.userId)) {
                 roomState[roomId].bannedUsers.push(targetSocket.userId);
@@ -424,13 +458,12 @@ io.on("connection", (socket) => {
             }
         }
 
-        // 4. Kick
+        // Kick
         io.to(targetSocketId).emit('kicked');
         targetSocket.disconnect();
     });
 
-    // ... (rest of editor events: destroy_room, editorOp, etc.) ...
-    
+    // --- ROOM DESTRUCTION ---
     socket.on("destroy_room", async () => {
         const roomId = socket.roomId;
         if (!roomId || !roomState[roomId]) return;
@@ -444,6 +477,7 @@ io.on("connection", (socket) => {
         }
     });
 
+    // --- EDITOR SYNC ---
     socket.on("editorOp", ({ roomId, changes, baseVersion }) => {
         const state = roomState[roomId];
         if (!state) return;
